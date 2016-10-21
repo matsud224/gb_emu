@@ -15,346 +15,473 @@
         )
 #endif
 
+#define BIT7_6(v) (((v)>>6)&0x3)
+#define BIT5_3(v) (((v)>>3)&0x7)
+#define BIT2_0(v) ((v)&0x7)
+#define BIT5_4(v) (((v)>>4)&0x3)
+#define BIT3(v) (((v)>>3)&0x1)
+
 const char *r_name[] = {"B", "C", "D", "E", "H", "L", NULL, "A"};
 const char *dd_name[] = {"BC", "DE", "HL", "SP"};
 const char *qq_name[] = {"BC", "DE", "HL", "AF"};
+const uint8_t p_table[] = {0x00, 0x08, 0x10, 0x18, 0x20, 0x28, 0x30, 0x38};
 
-void disas_one(uint8_t *code, int len) {
+int disas_one(uint8_t *code, int len) {
 	switch(*code){
 	case 0x36:
-		DISAS_PRINT("ld (HL),%X", *(code+1));
-		break;
+		//LD (HL),n
+		DISAS_PRINT("LD (HL),%hhX", *(code+1));
+		return 2;
 	case 0x0a:
-		DISAS_PRINT("ld A,(BC)");
+		//LD A,(BC)
+		DISAS_PRINT("LD A,(BC)");
 		break;
 	case 0x1a:
-		DISAS_PRINT("ld A,(DE)");
+		//LD A,(DE)
+		DISAS_PRINT("LD A,(DE)");
 		break;
 	case 0xfa:
-		DISAS_PRINT("ld A,(%X)", *((uint16_t*)(code+1)));
+		//LD A,(nn)
+		DISAS_PRINT("LD A,(%hX)", *(code+1));
 		break;
 	case 0x02:
-		DISAS_PRINT("ld (BC),A");
+		//LD (BC),A
+		DISAS_PRINT("LD (BC),A");
 		break;
 	case 0x12:
-		DISAS_PRINT("ld (DE),A");
+		//LD (DE),A
+		DISAS_PRINT("LD (DE),A");
+		break;
+	case 0x08:
+		//LD (nn),SP
+		DISAS_PRINT("LD (%hX),SP", *(code+1));
 		break;
 	case 0xea:
-		DISAS_PRINT("ld (%X),A", *((uint16_t*)(code+1)));
+		//LD (nn),A
+		DISAS_PRINT("LD (%hX),A", *(code+1));
 		break;
 	case 0xf0:
-		DISAS_PRINT("ld A,(FF00+%X)", *(code+1));
+		//LD A,(FF00+n)
+		DISAS_PRINT("LD A,(FF00+%hhX)", *(code+1));
 		break;
 	case 0xe0:
-		DISAS_PRINT("ld (FF00+%X),A", *(code+1));
+		//LD (FF00+n),A
+		DISAS_PRINT("LD (FF00+%hhX),A", *(code+1));
 		break;
 	case 0xf2:
-		DISAS_PRINT("ld A,(FF00+C)");
+		//LD A,(FF00+C)
+		DISAS_PRINT("LD A,(FF00+C)");
 		break;
 	case 0xe2:
-		DISAS_PRINT("ld (FF00+C),A");
+		//LD (FF00+C),A
+		DISAS_PRINT("LD (FF00+C),A");
 		break;
 	case 0x22:
-		DISAS_PRINT("ldi (HL),A");
+		//LDI (HL),A
+		DISAS_PRINT("LDI (HL),A");
 		break;
 	case 0x2a:
-		DISAS_PRINT("ldi A,(HL)");
+		//LDI A,(HL)
+		DISAS_PRINT("LDI A,(HL)");
 		break;
 	case 0x32:
-		DISAS_PRINT("ldd (HL),A");
+		//LDD (HL),A
+		DISAS_PRINT("LDD (HL),A");
 		break;
 	case 0x3a:
-		DISAS_PRINT("ldd A,(HL)");
+		//LDD A,(HL)
+		DISAS_PRINT("LDD A,(HL)");
 		break;
 	case 0xf9:
-		DISAS_PRINT("ld SP,HL");
+		//LD SP,HL
+		DISAS_PRINT("LD SP,HL");
 		break;
 	case 0xc6:
-		DISAS_PRINT("add A,%X", *(code+1));
+		//ADD A,n
+		DISAS_PRINT("ADD A,%hhX", *(code+1));
 		break;
 	case 0x86:
-		DISAS_PRINT("add A,(HL)");
+		//ADD A,(HL)
+		DISAS_PRINT("ADD A,(HL)");
 		break;
 	case 0xce:
-		DISAS_PRINT("adc A,%X", *(code+1));
+		//ADC A,n
+		DISAS_PRINT("ADC A,%hhX", *(code+1));
 		break;
 	case 0x8e:
-		DISAS_PRINT("adc A,(HL)");
+		//ADC A,(HL)
+		DISAS_PRINT("ADC A,(HL)");
 		break;
 	case 0xd6:
-		DISAS_PRINT("sub %X", *(code+1));
+		//SUB n
+		DISAS_PRINT("SUB %hhX", *(code+1));
 		break;
 	case 0x96:
-		DISAS_PRINT("sub (HL)");
+		//SUB (HL)
+		DISAS_PRINT("SUB (HL)");
 		break;
 	case 0xde:
-		DISAS_PRINT("sbc A,%X", *(code+1));
+		//SBC A,n
+		DISAS_PRINT("SBC A,%hhX", *(code+1));
 		break;
 	case 0x9e:
-		DISAS_PRINT("sbc A,(HL)");
+		//SBC A,(HL)
+		DISAS_PRINT("SBC A,(HL)");
 		break;
 	case 0xe6:
-		DISAS_PRINT("and %X", *(code+1));
+		//AND n
+		DISAS_PRINT("AND %hhX", *(code+1));
 		break;
 	case 0xa6:
-		DISAS_PRINT("and (HL)");
+		//AND (HL)
+		DISAS_PRINT("AND (HL)");
 		break;
 	case 0xee:
-		DISAS_PRINT("xor %X", *(code+1));
+		//XOR n
+		DISAS_PRINT("XOR %hhX", *(code+1));
 		break;
 	case 0xae:
-		DISAS_PRINT("xor (HL)");
+		//XOR (HL)
+		DISAS_PRINT("XOR (HL)");
 		break;
 	case 0xf6:
-		DISAS_PRINT("or %X", *(code+1));
+		//OR n
+		DISAS_PRINT("OR %hhX", *(code+1));
 		break;
 	case 0xb6:
-		DISAS_PRINT("or (HL)");
+		//OR (HL)
+		DISAS_PRINT("OR (HL)");
 		break;
 	case 0xfe:
-		DISAS_PRINT("cp %X", *(code+1));
+		//CP n
+		DISAS_PRINT("CP %hhX", *(code+1));
 		break;
 	case 0xbe:
-		DISAS_PRINT("cp (HL)");
+		//CP (HL)
+		DISAS_PRINT("CP (HL)");
 		break;
 	case 0x34:
-		DISAS_PRINT("inc (HL)");
+		//INC (HL)
+		DISAS_PRINT("INC (HL)");
 		break;
 	case 0x35:
-		DISAS_PRINT("dec (HL)");
+		//DEC (HL)
+		DISAS_PRINT("DEC (HL)");
 		break;
 	case 0x27:
+		//DAA
 		DISAS_PRINT("daa");
 		break;
 	case 0x2f:
-		DISAS_PRINT("cpl");
+		//CPL
+		DISAS_PRINT("CPL");
 		break;
 	case 0xe8:
-		DISAS_PRINT("add SP,%x", *((int8_t*)(code+1)));
+		//ADD SP,dd
+		DISAS_PRINT("ADD SP,%hhX", *(code+1));
 		break;
 	case 0xf8:
-		DISAS_PRINT("ld HL,SP+%x", *((int8_t*)(code+1)));
+		//LD HL,SP+dd
+		DISAS_PRINT("LD HL,SP+%hhX", *(code+1));
 		break;
 	case 0x07:
-		DISAS_PRINT("rlca");
+        //RLCA
+		DISAS_PRINT("RLCA");
 		break;
 	case 0x17:
-		DISAS_PRINT("rla");
+		//RLA
+		DISAS_PRINT("RLA");
 		break;
 	case 0x0f:
-		DISAS_PRINT("rrca");
+		//RRCA
+		DISAS_PRINT("RRCA");
 		break;
 	case 0x1f:
-		DISAS_PRINT("rra");
+		//RRA
+		DISAS_PRINT("RRA");
 		break;
 	case 0xcb:
-		switch(*(code+1)){
+
+		code++;
+
+		switch(*code){
 		case 0x06:
-			DISAS_PRINT("rlc (HL)");
+			//RLC (HL)
+			DISAS_PRINT("RLC (HL)");
 			break;
 		case 0x16:
-			DISAS_PRINT("rl (HL)");
+			//RL (HL)
+			DISAS_PRINT("RL (HL)");
 			break;
 		case 0x0e:
-			DISAS_PRINT("rrc (HL)");
+			//RRC (HL)
+			DISAS_PRINT("RRC (HL)");
 			break;
 		case 0x1e:
-			DISAS_PRINT("rr (HL)");
+			//RR (HL)
+			DISAS_PRINT("RR (HL)");
 			break;
 		case 0x26:
-			DISAS_PRINT("sla (HL)");
+			//SLA (HL)
+			DISAS_PRINT("SLA (HL)");
 			break;
 		case 0x36:
-			DISAS_PRINT("swap (HL)");
+			//SWAP (HL)
+			DISAS_PRINT("SWAP (HL)");
 			break;
 		case 0x2e:
-			DISAS_PRINT("sra (HL)");
+			//SRA (HL)
+			DISAS_PRINT("SRA (HL)");
 			break;
 		case 0x3e:
-			DISAS_PRINT("srl (HL)");
+			//SRL (HL)
+			DISAS_PRINT("SRL (HL)");
 			break;
 		}
 
-		switch((*code>>6)&0x3){
+		switch(BIT7_6(*code)){
 		case 0x0:
-			switch((*code>>3)&0x7){
+			switch(BIT5_3(*code)){
 			case 0x0:
-				DISAS_PRINT("rlc %s", r_name[*code&0x7]);
+				//RLC r
+				DISAS_PRINT("RLC %s", r_name[BIT2_0(*code)]);
 				break;
 			case 0x1:
-				DISAS_PRINT("rrc %s", r_name[*code&0x7]);
+				//RRC r
+				DISAS_PRINT("RRC %s", r_name[BIT2_0(*code)]);
 				break;
 			case 0x2:
-				DISAS_PRINT("rl %s", r_name[*code&0x7]);
+				//RL r
+				DISAS_PRINT("RL %s", r_name[BIT2_0(*code)]);
 				break;
 			case 0x3:
-				DISAS_PRINT("rr %s", r_name[*code&0x7]);
+				//RR r
+				DISAS_PRINT("RR %s", r_name[BIT2_0(*code)]);
 				break;
 			case 0x4:
-				DISAS_PRINT("sla %s", r_name[*code&0x7]);
+				//SLA r
+				DISAS_PRINT("SLA %s", r_name[BIT2_0(*code)]);
 				break;
 			case 0x5:
-				DISAS_PRINT("sra %s", r_name[*code&0x7]);
+				//SRA r
+				DISAS_PRINT("SRA %s", r_name[BIT2_0(*code)]);
 				break;
 			case 0x6:
-				DISAS_PRINT("swap %s", r_name[*code&0x7]);
+				//SWAP r
+				DISAS_PRINT("SWAP %s", r_name[BIT2_0(*code)]);
 				break;
 			case 0x7:
-				DISAS_PRINT("srl %s", r_name[*code&0x7]);
+				//SRL r
+				DISAS_PRINT("SRL %s", r_name[BIT2_0(*code)]);
 				break;
 			}
 			break;
 		case 0x1:
-			if((*code&0x7)==0x6)
-				DISAS_PRINT("bit %d,(HL)", (*code>>3)&0x7);
+			if(BIT2_0(*code)==0x6)
+				//BIT b,(HL)
+				DISAS_PRINT("BIT %d,(HL)", BIT5_3(*code));
 			else
-				DISAS_PRINT("bit %d,%s", (*code>>3)&0x7, r_name[*code&0x7]);
+				//BIT b,r
+				DISAS_PRINT("BIT %d,%s", BIT5_3(*code), r_name[BIT2_0(*code)]);
 			break;
 		case 0x2:
-			if((*code&0x7)==0x6)
-				DISAS_PRINT("set %d,(HL)", (*code>>3)&0x7);
+			if(BIT2_0(*code)==0x6)
+				//RES b,(HL)
+				DISAS_PRINT("RES %d,(HL)", BIT5_3(*code));
 			else
-				DISAS_PRINT("set %d,%s", (*code>>3)&0x7, r_name[*code&0x7]);
+				//RES b,r
+				DISAS_PRINT("RES %d,%s", BIT5_3(*code), r_name[BIT2_0(*code)]);
 			break;
 		case 0x3:
-			if((*code&0x7)==0x6)
-				DISAS_PRINT("res %d,(HL)", (*code>>3)&0x7);
+			if(BIT2_0(*code)==0x6)
+				//SET b,(HL)
+				DISAS_PRINT("SET %d,(HL)", BIT5_3(*code));
 			else
-				DISAS_PRINT("res %d,%s", (*code>>3)&0x7, r_name[*code&0x7]);
+				//SET b,r
+				DISAS_PRINT("SET %d,%s", BIT5_3(*code), r_name[BIT2_0(*code)]);
 			break;
 		}
 		break;
 	case 0x3f:
-		DISAS_PRINT("ccf");
+		//CCF
+		DISAS_PRINT("CCF");
 		break;
 	case 0x37:
-		DISAS_PRINT("scf");
+		//SCF
+		DISAS_PRINT("SCF");
 		break;
 	case 0x00:
-		DISAS_PRINT("nop");
+		//NOP
+		DISAS_PRINT("NOP");
 		break;
 	case 0x76:
-		DISAS_PRINT("halt");
+		//HALT
+		DISAS_PRINT("HALT");
 		break;
 	case 0x10:
-		//2 byte!!!!
-		DISAS_PRINT("stop");
+		//STOP
+		if(*(code+1)==0x0)
+			DISAS_PRINT("STOP");
 		break;
 	case 0xf3:
-		DISAS_PRINT("di");
+		//DI
+		DISAS_PRINT("DI");
 		break;
 	case 0xfb:
-		DISAS_PRINT("ei");
+		//EI
+		DISAS_PRINT("EI");
 		break;
 	case 0xc3:
-		DISAS_PRINT("jp %X", *((uint16_t*)(code+1)));
+		//JP nn
+		DISAS_PRINT("JP %hX", *(code+1));
 		break;
 	case 0xe9:
-		DISAS_PRINT("jp HL");
+		//JP HL
+		DISAS_PRINT("JP HL");
 		break;
 	case 0x18:
-		DISAS_PRINT("jp PC+%X", *((int8_t*)(code+1)));
+		//JR PC+e
+		DISAS_PRINT("JR PC+%hhX", *(code+1));
 		break;
 	case 0xcd:
-		DISAS_PRINT("call %X", *((uint16_t*)(code+1)));
+		//CALL nn
+		DISAS_PRINT("CALL %hX", *(code+1));
 		break;
 	case 0xc9:
-		DISAS_PRINT("ret");
+		//RET
+		DISAS_PRINT("RET");
 		break;
 	case 0xd9:
-		DISAS_PRINT("reti");
+		//RETI
+		DISAS_PRINT("RETI");
 		break;
 	}
 
-	switch(*code&0xc0){
-	case 0x00:
-		//bit7-6: 00
-		switch(*code&0x7){
+	switch(BIT7_6(*code)){
+	case 0x0:
+		switch(BIT2_0(*code)){
 		case 0x0:
-			DISAS_PRINT("jr %s,%X", cc_name[(*code>>3)&0x7], *code&0x7);
+			switch(BIT5_3(*code)){
+			case 0x7:
+				//JR C,e
+				DISAS_PRINT("JR C,%hhX", *(code+1)+2);
+				break;
+			case 0x6:
+				//JR NC,e
+				DISAS_PRINT("JR NC,%hhX", *(code+1)+2);
+				break;
+			case 0x5:
+				//JR Z,e
+				DISAS_PRINT("JR Z,%hhX", *(code+1)+2);
+				break;
+			case 0x4:
+				//JR NZ,e
+				DISAS_PRINT("JR NZ,%hhX", *(code+1)+2);
+				break;
+			}
 			break;
 		case 0x1:
-			if((*code>>3)&0x1)
-				DISAS_PRINT("add HL,%X", ss_name[(*code>>4)&0x3]);
+			if(BIT3(*code))
+				//ADD HL,ss
+				DISAS_PRINT("ADD HL,%s", ss_name[BIT5_4(*code)]);
 			else
-				DISAS_PRINT("ld %s,%X", dd_name[(*code>>4)&0x3]);
+				//LD dd,nn
+				DISAS_PRINT("LD %s,%hX", dd_name[BIT5_4(*code)], *(code+1));
 			break;
 		case 0x3:
-			if((*code>>3)&0x1)
-				DISAS_PRINT("dec %s", ss_name[(*code>>4)&0x3]);
+			if(BIT3(*code))
+				//DEC ss
+				DISAS_PRINT("DEC %s", ss_name[BIT5_4(*code)]);
 			else
-				DISAS_PRINT("inc %s", ss_name[(*code>>4)&0x3]);
+				//INC ss
+				DISAS_PRINT("INC %s", ss_name[BIT5_4(*code)]);
 			break;
 		case 0x4:
-			DISAS_PRINT("inc %s", r_name[(*code>>3)&0x3]);
+			//INC r
+			DISAS_PRINT("INC %s", r_name[BIT5_3(*code)]);
 			break;
 		case 0x5:
-			DISAS_PRINT("dec %s", r_name[(*code>>3)&0x3]);
+			//DEC r
+			DISAS_PRINT("DEC %s", r_name[BIT5_3(*code)]);
 			break;
 		case 0x6:
-			DISAS_PRINT("ld %s,%X", r_name[(*code>>3)&0x3], *(code+1));
+			//LD r,n
+			DISAS_PRINT("LD %s,%hhX", r_name[BIT5_3(*code)], *(code+1));
 			break;
 		}
 		break;
-	case 0x40:
-		//bit7-6: 01
-		if((*code&0x7)==0x6){
-			DISAS_PRINT("ld %s,(HL)", r_name[(*code>>3)&0x7]);
-		}else if(((*code>>3)&0x7)==0x6){
-			DISAS_PRINT("ld (HL),%s", r_name[(*code>>3)&0x7]);
-		}else{
-			DISAS_PRINT("ld %s,%s", r_name[*code&0x7], r_name[(*code>>3)&0x7]);
-		}
+	case 0x1:
+		if(BIT2_0(*code)==0x6)
+			//LD r,(HL)
+			DISAS_PRINT("LD %s,(HL)", r_name[BIT5_3(*code)]);
+		else if(BIT5_3(*code)==0x6)
+			//LD (HL),r
+			DISAS_PRINT("LD (HL),%s", r_name[BIT2_0(*code)]);
+		else
+			//LD r,r'
+			DISAS_PRINT("LD %s,%s", r_name[BIT5_3(*code)], r_name[BIT2_0(*code)]);
 		break;
-	case 0x80:
-		//bit7-6: 10
-		switch(*code>>3){
+	case 0x2:
+		switch(BIT5_3(*code)){
 		case 0x0:
-			DISAS_PRINT("add A,%s", r_name[*code&0x7]);
+			//ADD A,r
+			DISAS_PRINT("ADD A,%s", r_name[BIT2_0(*code)]);
 			break;
 		case 0x1:
-			DISAS_PRINT("adc A,%s", r_name[*code&0x7]);
+			//ADC A,r
+			DISAS_PRINT("ADC A,%s", r_name[BIT2_0(*code)]);
 			break;
 		case 0x2:
-			DISAS_PRINT("sub %s", r_name[*code&0x7]);
+			//SUB A,r
+			DISAS_PRINT("SUB %s", r_name[BIT2_0(*code)]);
 			break;
 		case 0x3:
-			DISAS_PRINT("sbc A,%s", r_name[*code&0x7]);
+			//SBC A,r
+			DISAS_PRINT("SBC A,%s", r_name[BIT2_0(*code)]);
 			break;
 		case 0x4:
-			DISAS_PRINT("and %s", r_name[*code&0x7]);
+			//AND A,r
+			DISAS_PRINT("AND %s", r_name[BIT2_0(*code)]);
 			break;
 		case 0x5:
-			DISAS_PRINT("xor %s", r_name[*code&0x7]);
+			//XOR A,r
+			DISAS_PRINT("XOR %s", r_name[BIT2_0(*code)]);
 			break;
 		case 0x6:
-			DISAS_PRINT("or %s", r_name[*code&0x7]);
+			//OR A,r
+			DISAS_PRINT("OR %s", r_name[BIT2_0(*code)]);
 			break;
 		case 0x7:
-			DISAS_PRINT("cp %s", r_name[*code&0x7]);
+			//CP A,r
+			DISAS_PRINT("CP %s", r_name[BIT2_0(*code)]);
 			break;
 		}
 		break;
-	case 0xc0:
-		//bit7-6: 11
-		switch(*code&0x3){
+	case 0x3:
+		switch(BIT2_0(*code)){
 		case 0x0:
-			DISAS_PRINT("ret %s", cc_name[(*code>>3)&0x7]);
+			//RET cc
+			DISAS_PRINT("RET %s", cc_name[BIT5_3(*code)]);
 			break;
 		case 0x1:
-			DISAS_PRINT("pop %s", qq_name[(*code>>4)&0x3]);
+			//POP qq
+			DISAS_PRINT("POP %s", qq_name[BIT5_4(*code)]);
 			break;
 		case 0x2:
-			DISAS_PRINT("jp %s,%X", cc_name[(*code>>3)&0x7], *((uint16_t*)(code+1)));
+			//JP cc,nn
+			DISAS_PRINT("JP %s,%hX", cc_name[BIT5_3(*code)], *(code+1));
 			break;
 		case 0x4:
-			DISAS_PRINT("call %s,%X", cc_name[(*code>>3)&0x7], *((uint16_t*)(code+1)));
+			//CALL cc,nn
+			DISAS_PRINT("CALL %s,%hX", cc_name[BIT5_3(*code)], *(code+1));
 			break;
 		case 0x5:
-			DISAS_PRINT("push %s", qq_name[(*code>>4)&0x3]);
+			//PUSH qq
+			DISAS_PRINT("PUSH %s", qq_name[BIT5_4(*code)]);
 			break;
 		case 0x7:
-			DISAS_PRINT("rst %X", t_tbl[(*code>>3)&0x7]);
+			//RST p
+			DISAS_PRINT("RST %hhX", p_table[BIT5_3(*code)]);
 			break;
 		}
 		break;
@@ -365,7 +492,4 @@ void disas(uint8_t *code, int len) {
 
 }
 
-int main() {
 
-	return 0;
-}
