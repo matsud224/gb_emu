@@ -34,6 +34,9 @@ int main(int argc, char *argv[]) {
 	struct gb_cartridge *cart = (struct gb_cartridge*)(rom+0x100);
     printf("title: %.16s\ncgbflag: 0x%X\ncarttype: 0x%X\nromsize: 0x%X\nramsize: 0x%X\n",
 		 cart->title, cart->cgbflag, cart->carttype, cart->romsize, cart->ramsize);
+	rom+=0x150;
+	for(int i=0;i<100;i++)
+		rom+=disas_one(rom);
 
 	return 0;
 }
