@@ -2,7 +2,7 @@
 
 #include <inttypes.h>
 
-struct gb_cartridge {
+struct gb_carthdr {
 	uint8_t entrypoint[4];
 	uint8_t logo[0x30];
 	char title[0xb];
@@ -20,6 +20,16 @@ struct gb_cartridge {
 	uint16_t glbchksum;
 };
 
+struct cartridge *cart_init(uint8_t *rom);
+struct gb_carthdr *cart_header(struct cartridge *cart);
+void cart_rom0_write8(struct cartridge *cart, uint16_t dst, uint8_t value);
+void cart_romn_write8(struct cartridge *cart, uint16_t dst, uint8_t value);
+void cart_ramn_write8(struct cartridge *cart, uint16_t dst, uint8_t value);
+uint8_t cart_rom0_read8(struct cartridge *cart, uint16_t src);
+uint8_t cart_romn_read8(struct cartridge *cart, uint16_t src);
+uint8_t cart_ramn_read8(struct cartridge *cart, uint16_t src);
+
+#define CGBFLAG_GB			0x00
 #define CGBFLAG_BOTH		0x80
 #define CGBFLAG_CGBONLY		0xc0
 

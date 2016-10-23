@@ -64,7 +64,7 @@ static uint16_t* const qq_table[] = {&REG_BC, &REG_DE, &REG_HL};
 static uint16_t* const ss_table[] = {&REG_BC, &REG_DE, &REG_HL, &REG_SP};
 static uint8_t const p_table[] = {0x00, 0x08, 0x10, 0x18, 0x20, 0x28, 0x30, 0x38};
 
-int cpu_run(uint8_t *code) {
+int cpu_exec(uint8_t *code) {
 	uint8_t cond;
 
 	while(1){

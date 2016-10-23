@@ -2,6 +2,18 @@
 
 #include <inttypes.h>
 
+#define V_CART_ROM0 		0x0000
+#define	V_CART_ROMN			0x4000
+#define V_INTERNAL_VRAM			0x8000
+#define	V_CART_RAMN			0xa000
+#define V_INTERNAL_WRAM			0xc000
+#define V_INTERNAL_WRAM_MIRROR	0xe000
+#define V_INTERNAL_OAM			0xfe00
+#define V_INTERNAL_RESERVED		0xfea0
+#define V_INTERNAL_IO			0xff00
+#define V_INTERNAL_STACK		0xff80
+#define V_INTERNAL_INTMASK		0xffff
+
 #define IO_P1 0xFF00
 #define IO_SB 0xFF01
 #define IO_SC 0xFF02
@@ -47,7 +59,9 @@
 #define IO_BVBK 0xFF50
 #define IO_IE 0xFFFF
 
-void memory_init();
+struct cartridge;
+
+void memory_init(struct cartridge *c);
 void memory_write8(uint16_t dst, uint8_t value);
 void memory_write16(uint16_t dst, uint16_t value);
 uint8_t memory_read8(uint16_t src);

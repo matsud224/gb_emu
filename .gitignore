@@ -1,0 +1,6 @@
+bin/
+obj/
+*.save
+*.layout
+gb_emu
+
