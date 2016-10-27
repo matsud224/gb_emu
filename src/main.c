@@ -9,6 +9,7 @@
 
 #include "cpu.h"
 #include "cartridge.h"
+#include "memory.h"
 
 #define handle_error(msg) \
     do { perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -32,13 +33,19 @@ int main(int argc, char *argv[]) {
 		handle_error("mmap");
 
 	struct cartridge *cart = cart_init(rom);
-	if(rom == NULL)
+	if(cart == NULL)
 		return -1;
 	struct gb_carthdr *hdr = cart_header(cart);
     printf("title: %.16s\ncgbflag: 0x%X\ncarttype: 0x%X\nromsize: 0x%X\nramsize: 0x%X\n",
 		 hdr->title, hdr->cgbflag, hdr->carttype, hdr->romsize, hdr->ramsize);
 
+	if(memory_init(cart)){
+		free(cart);
+		return -1;
+	}
 
+
+	memory_free();
 
 	return 0;
 }

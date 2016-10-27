@@ -61,8 +61,9 @@
 
 struct cartridge;
 
-void memory_init(struct cartridge *c);
-void memory_write8(uint16_t dst, uint8_t value);
-void memory_write16(uint16_t dst, uint16_t value);
+int memory_init(struct cartridge *c);
+void memory_free(void);
+uint8_t memory_write8(uint16_t dst, uint8_t value);
+uint16_t memory_write16(uint16_t dst, uint16_t value);
 uint8_t memory_read8(uint16_t src);
 uint16_t memory_read16(uint16_t src);
