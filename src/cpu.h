@@ -1,5 +1,6 @@
 #pragma once
 
+void request_interrupt(uint8_t type);
 void cpu_exec(void);
 int disas_one(uint16_t pc);
 

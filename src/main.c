@@ -14,6 +14,11 @@
 #define handle_error(msg) \
     do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
+
+#define SCREEN_FPS 60
+#define SCREEN_TICK_PER_FRAME (1000 / SCREEN_FPS)
+
+
 int main(int argc, char *argv[]) {
 	if(argc != 2){
 		printf("too few argument\n");

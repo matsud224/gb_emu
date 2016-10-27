@@ -1,7 +1,9 @@
 #include "memory.h"
 #include "cartridge.h"
+#include "cpu.h"
 #include <stdlib.h>
-
+#include <time.h>
+#include "SDL2/SDL_timer.h"
 
 static uint8_t*		INTERNAL_VRAM = NULL;
 static uint8_t*		INTERNAL_WRAM = NULL;
@@ -12,8 +14,15 @@ static uint8_t*		INTERNAL_IO = NULL;
 static uint8_t*		INTERNAL_STACK = NULL;
 
 SDL_atomic_t REG_IF, REG_IE;
+struct timespec div_origin, timer_origin;
+SDL_TimerID timer_id = 0;
 
 static struct cartridge *cart;
+
+Uint32 timer_callback(Uint32 interval, void *param) {
+	request_interrupt(INT_TIMER);
+	return interval;
+}
 
 int memory_init(struct cartridge *c) {
 	cart = c;
@@ -24,6 +33,7 @@ int memory_init(struct cartridge *c) {
 	if((INTERNAL_RESERVED = malloc(sizeof(uint8_t) * 0x60)) == NULL) goto err;
 	if((INTERNAL_IO = malloc(sizeof(uint8_t) * 0x80)) == NULL) goto err;
 	if((INTERNAL_STACK = malloc(sizeof(uint8_t) * 0x7f)) == NULL) goto err;
+	clock_gettime(CLOCK_MONOTONIC, &div_origin);
 	return 0;
 err:
 	memory_free();
@@ -57,10 +67,28 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 							//INTERNAL_IO
 							switch(dst-V_INTERNAL_IO){
 							case IO_P1_R: break;
-							case IO_DIV_R: break;
-							case IO_TIMA_R: break;
-							case IO_TMA_R: break;
-							case IO_TAC_R: break;
+							case IO_DIV_R: clock_gettime(CLOCK_MONOTONIC, &div_origin); break;
+							case IO_TIMA_R: INTERNAL_IO[IO_TIMA_R]=value; break;
+							case IO_TMA_R: INTERNAL_IO[IO_TMA_R]=value; break;
+							case IO_TAC_R:
+								{
+									INTERNAL_IO[IO_TAC_R]=value;
+									SDL_RemoveTimer(timer_id);
+									if(value&0x4){
+										//timer start
+										clock_gettime(CLOCK_MONOTONIC, &timer_origin);
+										int hz_exp;
+										switch(value&0x3){
+										case 0: hz_exp=12;
+										case 1: hz_exp=18;
+										case 2: hz_exp=16;
+										case 3: hz_exp=14;
+										}
+										//1ms=10^6sec~~2^20sec
+										timer_id=SDL_AddTimer((0xff-INTERNAL_IO[IO_TMA])<<(20-hz_exp), timer_callback, NULL);
+									}
+								}
+								break;
 							case IO_IF_R: CAS_UPDATE(REG_IF, value); break;
 							case IO_LCDC_R: break;
 							case IO_STAT_R: break;
@@ -146,10 +174,38 @@ uint8_t memory_read8(uint16_t src) {
 							//INTERNAL_IO
 							switch(src-V_INTERNAL_IO){
 							case IO_P1_R: break;
-							case IO_DIV_R: break;
-							case IO_TIMA_R: break;
-							case IO_TMA_R: break;
-							case IO_TAC_R: break;
+							case IO_DIV_R:
+                                {
+                                	//8192Hz
+                                	struct timespec now;
+                                	clock_gettime(CLOCK_MONOTONIC, &now);
+                                	int64_t diff_sec=now.tv_sec-div_origin.tv_sec;
+									int64_t diff_usec=(now.tv_nsec-div_origin.tv_nsec)/1000;
+									if(diff_usec<0){
+										diff_sec--; diff_usec+=1000000;
+									}
+									return (((diff_sec<<13)&0xff)+((diff_usec>>7)&0xff))&0xff;
+                                }
+							case IO_TIMA_R:
+								{
+                                	struct timespec now;
+                                	clock_gettime(CLOCK_MONOTONIC, &now);
+                                	int64_t diff_sec=now.tv_sec-timer_origin.tv_sec;
+									int64_t diff_usec=(now.tv_nsec-timer_origin.tv_nsec)/1000;
+									int hz_exp;
+									switch(INTERNAL_IO[IO_TAC_R]&0x3){
+									case 0: hz_exp=12;
+									case 1: hz_exp=18;
+									case 2: hz_exp=16;
+									case 3: hz_exp=14;
+									}
+									if(diff_usec<0){
+										diff_sec--; diff_usec+=1000000;
+									}
+									return (INTERNAL_IO[IO_TMA_R]+((diff_sec<<hz_exp)&0xff)+((diff_usec>>(20-hz_exp))&0xff))&0xff;
+                                }
+							case IO_TMA_R: return INTERNAL_IO[IO_TMA_R];
+							case IO_TAC_R: return INTERNAL_IO[IO_TAC_R];
 							case IO_IF_R: return REG_IF.value;
 							case IO_LCDC_R: break;
 							case IO_STAT_R: break;
