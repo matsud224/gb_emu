@@ -1,6 +1,6 @@
 #pragma once
 
-int cpu_exec(uint8_t *code);
+void cpu_exec(void);
 int disas_one(uint16_t pc);
 
 #define INT_VBLANK 0x1

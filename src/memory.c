@@ -2,6 +2,7 @@
 #include "cartridge.h"
 #include <stdlib.h>
 
+
 static uint8_t*		INTERNAL_VRAM = NULL;
 static uint8_t*		INTERNAL_WRAM = NULL;
 static uint8_t*		INTERNAL_WRAM_MIRROR;
@@ -9,7 +10,8 @@ static uint8_t*		INTERNAL_OAM = NULL;
 static uint8_t*		INTERNAL_RESERVED = NULL;
 static uint8_t*		INTERNAL_IO = NULL;
 static uint8_t*		INTERNAL_STACK = NULL;
-static uint8_t*		INTERNAL_INTMASK = NULL;
+
+SDL_atomic_t REG_IF, REG_IE;
 
 static struct cartridge *cart;
 
@@ -20,9 +22,8 @@ int memory_init(struct cartridge *c) {
 	INTERNAL_WRAM_MIRROR = INTERNAL_WRAM;
 	if((INTERNAL_OAM = malloc(sizeof(uint8_t) * 0xa0)) == NULL) goto err;
 	if((INTERNAL_RESERVED = malloc(sizeof(uint8_t) * 0x60)) == NULL) goto err;
-	if((INTERNAL_IO = malloc(sizeof(uint8_t) * 0x80+0x1)) == NULL) goto err;
+	if((INTERNAL_IO = malloc(sizeof(uint8_t) * 0x80)) == NULL) goto err;
 	if((INTERNAL_STACK = malloc(sizeof(uint8_t) * 0x7f)) == NULL) goto err;
-	INTERNAL_INTMASK = INTERNAL_IO+0x80;
 	return 0;
 err:
 	memory_free();
@@ -34,7 +35,7 @@ void memory_free() {
 	if(INTERNAL_WRAM!=NULL){ free(INTERNAL_WRAM); INTERNAL_WRAM = NULL; INTERNAL_WRAM_MIRROR = NULL; }
 	if(INTERNAL_OAM!=NULL){ free(INTERNAL_OAM); INTERNAL_OAM = NULL; }
 	if(INTERNAL_RESERVED!=NULL){ free(INTERNAL_RESERVED); INTERNAL_RESERVED = NULL; }
-	if(INTERNAL_IO!=NULL){ free(INTERNAL_IO); INTERNAL_IO = NULL; INTERNAL_INTMASK = NULL; }
+	if(INTERNAL_IO!=NULL){ free(INTERNAL_IO); INTERNAL_IO = NULL; }
 	if(INTERNAL_STACK!=NULL){ free(INTERNAL_STACK); INTERNAL_STACK = NULL; }
 }
 
@@ -47,14 +48,40 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 						if(dst & 0x80){
 							if(dst == 0xffff){
 								//INTERNAL_INTMASK
-								INTERNAL_INTMASK[0] = value;
+								CAS_UPDATE(REG_IE, value);
 							}else{
 								//INTERNAL_STACK
 								INTERNAL_STACK[dst-V_INTERNAL_STACK] = value;
 							}
 						}else{
 							//INTERNAL_IO
-							INTERNAL_IO[dst-V_INTERNAL_IO] = value;
+							switch(dst-V_INTERNAL_IO){
+							case IO_P1_R: break;
+							case IO_DIV_R: break;
+							case IO_TIMA_R: break;
+							case IO_TMA_R: break;
+							case IO_TAC_R: break;
+							case IO_IF_R: CAS_UPDATE(REG_IF, value); break;
+							case IO_LCDC_R: break;
+							case IO_STAT_R: break;
+							case IO_SCY_R: break;
+							case IO_SCX_R: break;
+							case IO_LY_R: break;
+							case IO_LYC_R: break;
+							case IO_DMA_R:
+								{
+									uint16_t start=(value)<<8, end=(start|0x9f);
+									uint16_t oam_dst=0xfe00;
+									for(; start<=end; start++)
+										memory_write8(oam_dst++, memory_read8(start));
+								}
+								break;
+							case IO_BGP_R: break;
+							case IO_OBP0_R: break;
+							case IO_OBP1_R: break;
+							case IO_WY_R: break;
+							case IO_WX_R: break;
+							}
 						}
 					}else{
 						if(dst & 0x20){
@@ -110,14 +137,33 @@ uint8_t memory_read8(uint16_t src) {
 						if(src & 0x80){
 							if(src == 0xffff){
 								//INTERNAL_INTMASK
-								return INTERNAL_INTMASK[0];
+								return REG_IE.value;
 							}else{
 								//INTERNAL_STACK
 								return INTERNAL_STACK[src-V_INTERNAL_STACK];
 							}
 						}else{
 							//INTERNAL_IO
-							return INTERNAL_IO[src-V_INTERNAL_IO];
+							switch(src-V_INTERNAL_IO){
+							case IO_P1_R: break;
+							case IO_DIV_R: break;
+							case IO_TIMA_R: break;
+							case IO_TMA_R: break;
+							case IO_TAC_R: break;
+							case IO_IF_R: return REG_IF.value;
+							case IO_LCDC_R: break;
+							case IO_STAT_R: break;
+							case IO_SCY_R: break;
+							case IO_SCX_R: break;
+							case IO_LY_R: break;
+							case IO_LYC_R: break;
+							case IO_DMA_R: return 0;
+							case IO_BGP_R: break;
+							case IO_OBP0_R: break;
+							case IO_OBP1_R: break;
+							case IO_WY_R: break;
+							case IO_WX_R: break;
+							}
 						}
 					}else{
 						if(src & 0x20){
@@ -154,6 +200,8 @@ uint8_t memory_read8(uint16_t src) {
 			return cart_rom0_read8(cart, src);
 		}
 	}
+
+	return 0;
 }
 
 uint16_t memory_read16(uint16_t src) {

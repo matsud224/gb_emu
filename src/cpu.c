@@ -4,6 +4,9 @@
 #include "cpu.h"
 #include "memory.h"
 
+#include "SDL2/SDL_atomic.h"
+#include "SDL2/SDL_mutex.h"
+
 #define SHOW_DISAS
 
 #ifndef SHOW_DISAS
@@ -84,14 +87,6 @@ uint32_t FLG_Z, FLG_N, FLG_H, FLG_C, FLG_IME;
 #define REG_PC reg_pc
 #define REG_SP reg_sp
 
-void cpu_request_interrupt() {
-	//memory_write(IO_IF)
-}
-
-void cpu_init() {
-
-}
-
 #define OPERAND8 (memory_read8(REG_PC+1))
 #define OPERAND16 (((memory_read8(REG_PC+2))<<8) & (memory_read8(REG_PC+1)))
 #define FLG_C_01 (!!FLG_C)
@@ -145,6 +140,7 @@ void cpu_init() {
 #define JR (REG_PC+=(int8_t)(OPERAND8))
 #define JP(va) (REG_PC=(va))
 #define CALL (memory_write16(REG_SP-2, REG_PC), REG_SP-=2, REG_PC=OPERAND16)
+#define CALL_ADDR(addr) (memory_write16(REG_SP-2, REG_PC), REG_SP-=2, REG_PC=(addr))
 #define RST(va) (memory_write16(REG_SP-2, REG_PC), REG_PC=(va), REG_SP-=2)
 
 #define RET (REG_PC=memory_read16(REG_SP), REG_SP+=2)
@@ -157,13 +153,47 @@ void cpu_init() {
 #define ADDHL_16(v) (tmp=REG_HL, cr=REG_HL+(v), FLG_N=0, FLG_C=REG_HL&0x10000, FLG_H=(((v)&0xfff)+(tmp&0xfff))&0x1000, REG_HL=cr)
 #define ADDSP_16 (tmp=REG_SP, REG_SP+=(int8_t)(OPERAND8), FLG_Z=0, FLG_N=0, FLG_C=REG_SP&0x10000, FLG_H=((OPERAND8&0xfff)+(tmp&0xfff))&0x1000)
 
-int cpu_exec2() {
+
+static SDL_sem *intwait_sem;
+int is_haltmode = 0;
+int is_stopmode = 0;
+
+void cpu_init() {
+	intwait_sem = SDL_CreateSemaphore(0);
+}
+
+void request_interrupt(uint8_t type) {
+	CAS_UPDATE(REG_IF, REG_IF.value|type);
+	if(is_haltmode || (is_stopmode&&type==INT_JOYPAD)){
+		is_haltmode=0; is_stopmode=0;
+		SDL_SemPost(intwait_sem);
+	}
+}
+
+void cpu_exec() {
 	uint32_t cr, tmp, tmp2;
 
 	while(1){
 		#ifdef SHOW_DISAS
 		disas_one(REG_PC);
 		#endif // SHOW_DISAS
+
+		//割り込みチェック
+		if(FLG_IME){
+			uint8_t masked=REG_IF.value&REG_IE.value;
+			uint8_t cause = masked&(~masked + 1); //1になっている一番下の桁
+			if(cause){
+				FLG_IME=0;
+				CAS_UPDATE(REG_IF, REG_IF.value&(~cause));
+				switch(cause){
+				case 0x1:  CALL_ADDR(0x40); break;
+				case 0x2:  CALL_ADDR(0x48); break;
+				case 0x4:  CALL_ADDR(0x50); break;
+				case 0x8:  CALL_ADDR(0x58); break;
+				case 0x10: CALL_ADDR(0x60); break;
+				}
+			}
+		}
 
 		switch(memory_read8(REG_PC)){
 		case 0x00: /* NOP - ---- */			REG_PC+=1; continue;
@@ -182,7 +212,12 @@ int cpu_exec2() {
 		case 0x0D: /* DEC C Z1H- */  		DEC(REG_C); REG_PC+=1; continue;
 		case 0x0E: /* LD C,n ---- */  		REG_C=OPERAND8; REG_PC+=2; continue;
 		case 0x0F: /* RRCA - 000C */  		RRCA; REG_PC+=1; continue;
-		case 0x10: /* STOP - ---- */  		/*not implemented*/ REG_PC+=2; continue;
+		case 0x10: /* STOP - ---- */
+			//TODO: LCDを白くする
+			is_stopmode = 1;
+			SDL_SemWait(intwait_sem);
+			REG_PC+=2;
+			continue;
 		case 0x11: /* LD DE,nn ---- */  	REG_DE=OPERAND16; REG_PC+=3; continue;
 		case 0x12: /* LD (DE),A ---- */  	memory_write8(REG_DE, REG_A); REG_PC+=1; continue;
 		case 0x13: /* INC DE ---- */  		REG_DE++; REG_PC+=1; continue;
@@ -332,7 +367,11 @@ int cpu_exec2() {
 		case 0x73: /* LD (HL),E ---- */ 	memory_write8(REG_HL, REG_E); continue;
 		case 0x74: /* LD (HL),H ---- */ 	memory_write8(REG_HL, REG_H); continue;
 		case 0x75: /* LD (HL),L ---- */ 	memory_write8(REG_HL, REG_L); continue;
-		case 0x76: /* HALT - ---- */  		/*not implemented*/ REG_PC+=1; continue;
+		case 0x76: /* HALT - ---- */
+			is_haltmode = 1;
+			SDL_SemWait(intwait_sem);
+			REG_PC+=1;
+			continue;
 		case 0x77: /* LD (HL),A ---- */ 	memory_write8(REG_HL, REG_A); REG_PC+=1; continue;
 		case 0x78: /* LD A,B ---- */ 		REG_A = REG_B; REG_PC+=1; continue;
 		case 0x79: /* LD A,C ---- */ 		REG_A = REG_C; REG_PC+=1; continue;
@@ -406,17 +445,17 @@ int cpu_exec2() {
 		case 0xBD: /* CP L Z1HC */  		BINOPA_CP(REG_L); REG_PC+=1; continue;
 		case 0xBE: /* CP (HL) Z1HC */  		BINOPA_CP(memory_read8(REG_HL)); REG_PC+=1; continue;
 		case 0xBF: /* CP A Z1HC */  		BINOPA_CP(REG_A); REG_PC+=1; continue;
-		case 0xC0: /* RET NZ ---- */  		if(!FLG_Z){RET;} REG_PC+=1; continue;
+		case 0xC0: /* RET NZ ---- */  		if(!FLG_Z){RET;}else{REG_PC+=1;} continue;
 		case 0xC1: /* POP BC ---- */  		POP(REG_BC); REG_PC+=1; continue;
-		case 0xC2: /* JP NZ,nn ---- */  	if(!FLG_Z){JP(OPERAND16);} REG_PC+=3; continue;
-		case 0xC3: /* JP nn ---- */  		JP(OPERAND16); REG_PC+=3; continue;
-		case 0xC4: /* CALL NZ,nn ---- */  	if(!FLG_Z){CALL;}  REG_PC+=3; continue;
+		case 0xC2: /* JP NZ,nn ---- */  	if(!FLG_Z){JP(OPERAND16);}else{REG_PC+=3;} continue;
+		case 0xC3: /* JP nn ---- */  		JP(OPERAND16); continue;
+		case 0xC4: /* CALL NZ,nn ---- */  	if(!FLG_Z){CALL;}else{REG_PC+=3;} continue;
 		case 0xC5: /* PUSH BC ---- */  		PUSH(REG_BC); REG_PC+=1; continue;
 		case 0xC6: /* ADD A,# Z0HC */  		BINOPA_ADD(OPERAND8); REG_PC+=2; continue;
-		case 0xC7: /* RST 00H ---- */ 	 	RST(0x00); REG_PC+=1; continue;
-		case 0xC8: /* RET Z ---- */  		if(FLG_Z){RET;}  REG_PC+=1; continue;
-		case 0xC9: /* RET - ---- */  		RET; REG_PC+=1; continue;
-		case 0xCA: /* JP Z,nn ---- */  		if(FLG_Z){JP(OPERAND16);} REG_PC+=3; continue;
+		case 0xC7: /* RST 00H ---- */ 	 	RST(0x00); continue;
+		case 0xC8: /* RET Z ---- */  		if(FLG_Z){RET;}else{REG_PC+=1;} continue;
+		case 0xC9: /* RET - ---- */  		RET; continue;
+		case 0xCA: /* JP Z,nn ---- */  		if(FLG_Z){JP(OPERAND16);}else{REG_PC+=3;} continue;
 		case 0xCB:
 			switch(memory_read8(REG_PC+1)){
 			case 0x00: /* RLC B Z00C */  	RLC(REG_B); REG_PC+=2; continue;
@@ -676,47 +715,47 @@ int cpu_exec2() {
 			case 0xFE: /* SET 7,(HL) ---- */SET_HL(7); REG_PC+=2; continue;
 			case 0xFF: /* SET 7,A ---- */  	SET(7, REG_A); REG_PC+=2; continue;
 			}
-		case 0xCC: /* CALL Z,nn ---- */  	if(FLG_Z){CALL;} REG_PC+=3; continue;
-		case 0xCD: /* CALL nn ---- */  		CALL; REG_PC+=3; continue;
+		case 0xCC: /* CALL Z,nn ---- */  	if(FLG_Z){CALL;}else{REG_PC+=3;} continue;
+		case 0xCD: /* CALL nn ---- */  		CALL; continue;
 		case 0xCE: /* ADC A,# Z0HC */  		BINOPA_ADD(OPERAND8+FLG_C_01); REG_PC+=2; continue;
-		case 0xCF: /* RST 08H ---- */  		RST(0x08); REG_PC+=1; continue;
-		case 0xD0: /* RET NC ---- */  		if(!FLG_C){RET;} REG_PC+=1; continue;
+		case 0xCF: /* RST 08H ---- */  		RST(0x08); continue;
+		case 0xD0: /* RET NC ---- */  		if(!FLG_C){RET;}else{REG_PC+=1;} continue;
 		case 0xD1: /* POP DE ---- */  		POP(REG_DE); REG_PC+=1; continue;
-		case 0xD2: /* JP NC,nn ---- */  	if(!FLG_C){JP(OPERAND16);} REG_PC+=3; continue;
-		case 0xD4: /* CALL NC,nn ---- */ 	if(!FLG_C){CALL;} REG_PC+=3; continue;
+		case 0xD2: /* JP NC,nn ---- */  	if(!FLG_C){JP(OPERAND16);}else{REG_PC+=3;} continue;
+		case 0xD4: /* CALL NC,nn ---- */ 	if(!FLG_C){CALL;}else{REG_PC+=3;} continue;
 		case 0xD5: /* PUSH DE ---- */  		PUSH(REG_DE); REG_PC+=1; continue;
 		case 0xD6: /* SUB # Z1HC */  		BINOPA_SUB(OPERAND8); REG_PC+=2; continue;
-		case 0xD7: /* RST 10H ---- */  		RST(0x10); REG_PC+=1; continue;
-		case 0xD8: /* RET C ---- */  		if(FLG_C){RET;} REG_PC+=1; continue;
-		case 0xD9: /* RETI - ---- */ 		RET; FLG_IME=1; REG_PC+=1; continue;
-		case 0xDA: /* JP C,nn ---- */  		if(FLG_C){JP(OPERAND16);} REG_PC+=3; continue;
-		case 0xDC: /* CALL C,nn ---- */  	if(FLG_C){CALL;} REG_PC+=3; continue;
+		case 0xD7: /* RST 10H ---- */  		RST(0x10); continue;
+		case 0xD8: /* RET C ---- */  		if(FLG_C){RET;}else{REG_PC+=1;} continue;
+		case 0xD9: /* RETI - ---- */ 		RET; FLG_IME=1; continue;
+		case 0xDA: /* JP C,nn ---- */  		if(FLG_C){JP(OPERAND16);}else{REG_PC+=3;} continue;
+		case 0xDC: /* CALL C,nn ---- */  	if(FLG_C){CALL;}else{REG_PC+=3;} continue;
 		case 0xDE: /* SBC A,# Z1HC */  		BINOPA_SUB(OPERAND8-FLG_C_01); REG_PC+=2; continue;
-		case 0xDF: /* RST 18H ---- */  		RST(0x18); REG_PC+=1; continue;
+		case 0xDF: /* RST 18H ---- */  		RST(0x18); continue;
 		case 0xE0: /* LD ($FF00+n),A ---- */memory_write8(0xff00+OPERAND8, REG_A); REG_PC+=2; continue;
 		case 0xE1: /* POP HL ---- */  		POP(REG_HL); REG_PC+=1; continue;
 		case 0xE2: /* LD ($FF00+C),A ---- */memory_write8(0xff00+REG_C, REG_A); REG_PC+=1; continue;
 		case 0xE5: /* PUSH HL ---- */  		PUSH(REG_HL); REG_PC+=1; continue;
 		case 0xE6: /* AND # Z010 */  		BINOPA_LOGIC(&, OPERAND8, 0, 1); REG_PC+=2; continue;
-		case 0xE7: /* RST 20H ---- */  		RST(0x20); REG_PC+=1; continue;
+		case 0xE7: /* RST 20H ---- */  		RST(0x20); continue;
 		case 0xE8: /* ADD SP,n 00HC */  	ADDSP_16; REG_PC+=2; continue;
-		case 0xE9: /* JP (HL) ---- */  		JP(memory_read8(REG_HL)); REG_PC+=1; continue;
+		case 0xE9: /* JP (HL) ---- */  		JP(memory_read8(REG_HL)); continue;
 		case 0xEA: /* LD (nn),A ---- */  	memory_write8(OPERAND16, REG_A); REG_PC+=3; continue;
 		case 0xEE: /* XOR * Z000 */  		BINOPA_LOGIC(^, OPERAND8, 0, 0);REG_PC+=2; continue;
-		case 0xEF: /* RST 28H ---- */  		RST(0x28); REG_PC+=1; continue;
+		case 0xEF: /* RST 28H ---- */  		RST(0x28); continue;
 		case 0xF0: /* LD A,($FF00+n) ---- */REG_A=0xff00+OPERAND8; REG_PC+=2; continue;
 		case 0xF1: /* POP AF ---- */  		POP_AF; REG_PC+=1; continue;
 		case 0xF2: /* LD A,($FF00+C) ---- */REG_A=0xff00+REG_C; REG_PC+=1; continue;
 		case 0xF3: /* DI - ---- */  		FLG_IME=0; REG_PC+=1; continue;
 		case 0xF5: /* PUSH AF ---- */  		PUSH_AF; REG_PC+=1; continue;
 		case 0xF6: /* OR # Z000 */  		BINOPA_LOGIC(|, OPERAND8, 0, 0);REG_PC+=2; continue;
-		case 0xF7: /* RST 30H ---- */  		RST(0x30); REG_PC+=1; continue;
+		case 0xF7: /* RST 30H ---- */  		RST(0x30); continue;
 		case 0xF8: /* LDHL SP,n 00HC */  	REG_HL=REG_SP+(int8_t)(OPERAND8); REG_PC+=2; continue;
 		case 0xF9: /* LD SP,HL ---- */  	REG_SP=REG_HL; REG_PC+=1; continue;
 		case 0xFA: /* LD A,(nn) ---- */  	REG_A=memory_read8(OPERAND16); REG_PC+=3; continue;
 		case 0xFB: /* EI - ---- */  		FLG_IME=1; REG_PC+=1; continue;
 		case 0xFE: /* CP # Z1HC */  		BINOPA_CP(OPERAND8); REG_PC+=2; continue;
-		case 0xFF: /* RST 38H ---- */  		RST(0x38); REG_PC+=1; continue;
+		case 0xFF: /* RST 38H ---- */  		RST(0x38); continue;
 		}
 	}
 }
