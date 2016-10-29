@@ -4,12 +4,22 @@
 #include "SDL2/SDL_atomic.h"
 
 
+extern uint8_t LCDMODE;
 extern SDL_atomic_t REG_IF, REG_IE;
 
 #define CAS_UPDATE(target, val) do{ \
 	int old, new; \
 	do{ old=(target).value; new=val; }while(SDL_AtomicCAS(&(target), old, new)==SDL_FALSE); \
 	}while(0);
+
+extern uint8_t*		INTERNAL_VRAM;
+extern uint8_t*		INTERNAL_OAM;
+extern uint8_t*		INTERNAL_IO;
+
+#define LCDMODE_HBLANK 0
+#define LCDMODE_VBLANK 1
+#define LCDMODE_SEARCHOAM 2
+#define LCDMODE_TRANSFERRING 3
 
 #define V_CART_ROM0 		0x0000
 #define	V_CART_ROMN			0x4000

@@ -1,7 +1,8 @@
 #pragma once
 
+void startup(void);
 void request_interrupt(uint8_t type);
-void cpu_exec(void);
+int cpu_exec(void *ptr);
 int disas_one(uint16_t pc);
 
 #define INT_VBLANK 0x1

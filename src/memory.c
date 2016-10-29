@@ -5,15 +5,16 @@
 #include <time.h>
 #include "SDL2/SDL_timer.h"
 
-static uint8_t*		INTERNAL_VRAM = NULL;
+uint8_t*			INTERNAL_VRAM = NULL;
 static uint8_t*		INTERNAL_WRAM = NULL;
 static uint8_t*		INTERNAL_WRAM_MIRROR;
-static uint8_t*		INTERNAL_OAM = NULL;
+uint8_t*			INTERNAL_OAM = NULL;
 static uint8_t*		INTERNAL_RESERVED = NULL;
-static uint8_t*		INTERNAL_IO = NULL;
+uint8_t*			INTERNAL_IO = NULL;
 static uint8_t*		INTERNAL_STACK = NULL;
 
 SDL_atomic_t REG_IF, REG_IE;
+uint8_t LCDMODE;
 struct timespec div_origin, timer_origin;
 SDL_TimerID timer_id = 0;
 
@@ -34,6 +35,7 @@ int memory_init(struct cartridge *c) {
 	if((INTERNAL_IO = malloc(sizeof(uint8_t) * 0x80)) == NULL) goto err;
 	if((INTERNAL_STACK = malloc(sizeof(uint8_t) * 0x7f)) == NULL) goto err;
 	clock_gettime(CLOCK_MONOTONIC, &div_origin);
+	LCDMODE = LCDMODE_VBLANK;
 	return 0;
 err:
 	memory_free();
@@ -90,12 +92,12 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 								}
 								break;
 							case IO_IF_R: CAS_UPDATE(REG_IF, value); break;
-							case IO_LCDC_R: break;
-							case IO_STAT_R: break;
-							case IO_SCY_R: break;
-							case IO_SCX_R: break;
+							case IO_LCDC_R: INTERNAL_IO[IO_LCDC_R]=value; break;
+							case IO_STAT_R: INTERNAL_IO[IO_STAT_R]=value; break;
+							case IO_SCY_R: INTERNAL_IO[IO_SCY_R]=value; break;
+							case IO_SCX_R: INTERNAL_IO[IO_SCX_R]=value; break;
 							case IO_LY_R: break;
-							case IO_LYC_R: break;
+							case IO_LYC_R: INTERNAL_IO[IO_LYC_R]=value; break;
 							case IO_DMA_R:
 								{
 									uint16_t start=(value)<<8, end=(start|0x9f);
@@ -104,11 +106,11 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 										memory_write8(oam_dst++, memory_read8(start));
 								}
 								break;
-							case IO_BGP_R: break;
-							case IO_OBP0_R: break;
-							case IO_OBP1_R: break;
-							case IO_WY_R: break;
-							case IO_WX_R: break;
+							case IO_BGP_R: INTERNAL_IO[IO_BGP_R]=value; break;
+							case IO_OBP0_R: INTERNAL_IO[IO_OBP0_R]=value; break;
+							case IO_OBP1_R: INTERNAL_IO[IO_OBP1_R]=value; break;
+							case IO_WY_R: INTERNAL_IO[IO_WY_R]=value; break;
+							case IO_WX_R: INTERNAL_IO[IO_WX_R]=value; break;
 							}
 						}
 					}else{
@@ -173,7 +175,7 @@ uint8_t memory_read8(uint16_t src) {
 						}else{
 							//INTERNAL_IO
 							switch(src-V_INTERNAL_IO){
-							case IO_P1_R: break;
+							case IO_P1_R: return 0xff;
 							case IO_DIV_R:
                                 {
                                 	//8192Hz
@@ -207,18 +209,20 @@ uint8_t memory_read8(uint16_t src) {
 							case IO_TMA_R: return INTERNAL_IO[IO_TMA_R];
 							case IO_TAC_R: return INTERNAL_IO[IO_TAC_R];
 							case IO_IF_R: return REG_IF.value;
-							case IO_LCDC_R: break;
-							case IO_STAT_R: break;
-							case IO_SCY_R: break;
-							case IO_SCX_R: break;
-							case IO_LY_R: break;
-							case IO_LYC_R: break;
+							case IO_LCDC_R: return INTERNAL_IO[IO_LCDC_R];
+							case IO_STAT_R:
+								//下位3bitは別で管理
+								return (INTERNAL_IO[IO_STAT_R]&0xf8) | ((INTERNAL_IO[IO_LY_R]==INTERNAL_IO[IO_LYC_R])<<2) | LCDMODE;
+							case IO_SCY_R: return INTERNAL_IO[IO_SCY_R];
+							case IO_SCX_R: return INTERNAL_IO[IO_SCX_R];
+							case IO_LY_R: return INTERNAL_IO[IO_LY_R];
+							case IO_LYC_R: return INTERNAL_IO[IO_LYC_R];
 							case IO_DMA_R: return 0;
-							case IO_BGP_R: break;
-							case IO_OBP0_R: break;
-							case IO_OBP1_R: break;
-							case IO_WY_R: break;
-							case IO_WX_R: break;
+							case IO_BGP_R: return INTERNAL_IO[IO_BGP_R];
+							case IO_OBP0_R: return INTERNAL_IO[IO_OBP0_R];
+							case IO_OBP1_R: return INTERNAL_IO[IO_OBP1_R];
+							case IO_WY_R: return INTERNAL_IO[IO_WY_R];
+							case IO_WX_R: return INTERNAL_IO[IO_WX_R];
 							}
 						}
 					}else{
