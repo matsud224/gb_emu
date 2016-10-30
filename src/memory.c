@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include "SDL2/SDL_timer.h"
+#include "SDL2/SDL_keyboard.h"
+#include "SDL2/SDL_scancode.h"
 
 uint8_t*			INTERNAL_VRAM = NULL;
 static uint8_t*		INTERNAL_WRAM = NULL;
@@ -68,7 +70,7 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 						}else{
 							//INTERNAL_IO
 							switch(dst-V_INTERNAL_IO){
-							case IO_P1_R: break;
+							case IO_P1_R: INTERNAL_IO[IO_P1_R] = value; break;
 							case IO_DIV_R: clock_gettime(CLOCK_MONOTONIC, &div_origin); break;
 							case IO_TIMA_R: INTERNAL_IO[IO_TIMA_R]=value; break;
 							case IO_TMA_R: INTERNAL_IO[IO_TMA_R]=value; break;
@@ -94,8 +96,8 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 							case IO_IF_R: CAS_UPDATE(REG_IF, value); break;
 							case IO_LCDC_R: INTERNAL_IO[IO_LCDC_R]=value; printf("LCDC=0x%X\n", value); break;
 							case IO_STAT_R: INTERNAL_IO[IO_STAT_R]=value; break;
-							case IO_SCY_R: INTERNAL_IO[IO_SCY_R]=value; break;
-							case IO_SCX_R: INTERNAL_IO[IO_SCX_R]=value; break;
+							case IO_SCY_R: INTERNAL_IO[IO_SCY_R]=value; printf("SCY=%d\n", value); break;
+							case IO_SCX_R: INTERNAL_IO[IO_SCX_R]=value; printf("SCX=%d\n", value); break;
 							case IO_LY_R: break;
 							case IO_LYC_R: INTERNAL_IO[IO_LYC_R]=value; break;
 							case IO_DMA_R:
@@ -137,7 +139,7 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 			}else{
 				//INTERNAL_VRAM
 				INTERNAL_VRAM[dst-V_INTERNAL_VRAM] = value;
-				if(dst>=0x9800) printf("VRAM access: VRAM[0x%X]=0x%X\n", dst, value);
+				//if(dst>=0x9800) printf("VRAM access: VRAM[0x%X]=0x%X\n", dst, value);
 			}
 		}
 	}else{
@@ -176,7 +178,25 @@ uint8_t memory_read8(uint16_t src) {
 						}else{
 							//INTERNAL_IO
 							switch(src-V_INTERNAL_IO){
-							case IO_P1_R: return 0xff;
+							case IO_P1_R:
+								{
+									uint8_t p1=INTERNAL_IO[IO_P1_R];
+									const Uint8 *state=SDL_GetKeyboardState(NULL);
+									int p10=1, p11=1, p12=1, p13=1, p14 = p1&0x10, p15 = p1&0x20;
+									if(!p14){
+										if(state[SDL_SCANCODE_RIGHT]) p10=0;
+										if(state[SDL_SCANCODE_LEFT]) p11=0;
+										if(state[SDL_SCANCODE_UP]) p12=0;
+										if(state[SDL_SCANCODE_DOWN]) p13=0;
+									}
+									if(!p15){
+										if(state[SDL_SCANCODE_A]) p10=0;
+										if(state[SDL_SCANCODE_B]) p11=0;
+										if(state[SDL_SCANCODE_LEFTBRACKET]) p12=0;
+										if(state[SDL_SCANCODE_RIGHTBRACKET]) p13=0;
+									}
+									return 0x3<<6 | p15<<5 | p14<<4 | p13<<3 | p12<<2 | p11<<1 | p10;
+								}
 							case IO_DIV_R:
                                 {
                                 	//8192Hz

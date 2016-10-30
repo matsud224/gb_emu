@@ -179,6 +179,7 @@ void startup() {
 	REG_HL=0x014d;
 	REG_SP=0xfffe;
 	FLG_IME=1; //???
+	memory_write8(0xff00, 0x00);
 	memory_write8(0xff05, 0x00);
 	memory_write8(0xff06, 0x00);
 	memory_write8(0xff07, 0x00);

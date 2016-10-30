@@ -116,7 +116,7 @@ static void draw_background(uint8_t lcdc, Uint32 buf[], Uint32 colors[]) {
 
 	for(int y=0; y<144; y++){
 		for(int x=0; x<160; x++){
-			int map_y=(y+scy)%144, map_x=(x+scx)%160;
+			int map_y=(y+scy)%256, map_x=(x+scx)%256;
             int tile_y=map_y>>3, tile_x=map_x>>3;
             uint8_t *thisdata; //タイルパターンデータの開始アドレス
             if(lcdc&0x10)
@@ -126,7 +126,7 @@ static void draw_background(uint8_t lcdc, Uint32 buf[], Uint32 colors[]) {
 
 			int in_x=map_x%8, in_y=map_y%8;
 			uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
-			buf[(tile_y*8+in_y)*160 + tile_x*8+in_x] = colors[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
+			buf[y*160 + x] = colors[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
 		}
 	}
 }
@@ -208,6 +208,26 @@ int main(int argc, char *argv[]) {
 			case SDL_QUIT:
 				quit=1;
 				break;
+			case SDL_KEYDOWN:
+				switch(e.key.keysym.scancode){
+				case SDL_SCANCODE_RIGHT:
+				case SDL_SCANCODE_LEFT:
+				case SDL_SCANCODE_UP:
+				case SDL_SCANCODE_DOWN:
+					if((INTERNAL_IO[IO_P1_R]&0x10)==0)
+						request_interrupt(INT_JOYPAD);
+					break;
+				case SDL_SCANCODE_A:
+				case SDL_SCANCODE_B:
+				case SDL_SCANCODE_LEFTBRACKET:
+				case SDL_SCANCODE_RIGHTBRACKET:
+					if((INTERNAL_IO[IO_P1_R]&0x20)==0)
+						request_interrupt(INT_JOYPAD);
+					break;
+				default:
+					break;
+				}
+				break;
 			}
 		}
 
@@ -233,8 +253,6 @@ int main(int argc, char *argv[]) {
 			change_lcdmode(3); wait_cpuclk(175);
 
 			if(lcdc&0x1){
-				for(int i=0; i<1024; i++)
-					bg_buf[i] = colors[0];
 				draw_background(lcdc, bg_buf, colors);
 				SDL_Texture *texture = SDL_CreateTextureFromSurface(window_renderer, bg_surface);
 				SDL_RenderCopy(window_renderer, texture, NULL, NULL);
