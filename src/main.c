@@ -19,16 +19,15 @@
 #define handle_error(msg) \
     do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
-
 #define SCREEN_WIDTH (160<<2)
 #define SCREEN_HEIGHT (144<<2)
 #define SCREEN_FPS 60
 #define SCREEN_TICK_PER_FRAME (1000 / SCREEN_FPS)
 
-
-
 #define TIMER_START(t) ((t)=SDL_GetTicks())
 #define TIMER_GET(t) (SDL_GetTicks()-(t))
+
+#define MIN(x,y) ((x)<(y)?(x):(y))
 
 static SDL_Window *main_window;
 static SDL_Renderer *window_renderer;
@@ -96,15 +95,44 @@ static void change_lcdmode(int mode) {
 	}
 }
 
+
+//画面に表示する色
+struct RGB{
+	Uint8 r,g,b;
+};
+
+struct RGB ACTUALCOLOR[4] = {{222,249,208},
+							 {139,192,112},
+							 {68,100,59},
+							 {36,54,31}};
+
 #define PALETTE(p,n) ((INTERNAL_IO[p]>>(n))&0x3)
-#define BGPALETTE(n) ((INTERNAL_IO[IO_BGP_R]>>(n))&0x3)
-#define PIXEL_BW(x,y,c) (buf[(y)*160+(x)]=(c)?0x00000000:0x00ffffff)
-static void draw_bg_and_win(uint8_t lcdc, Uint32 buf[]) {
+#define BGPALETTE(n) ((INTERNAL_IO[IO_BGP_R]>>((n)<<1))&0x3)
+
+static void draw_background(uint8_t lcdc, Uint32 buf[], Uint32 colors[]) {
+	uint8_t *tilemap = INTERNAL_VRAM+(((lcdc&0x8)?0x9c00:0x9800)-V_INTERNAL_VRAM);
+	uint8_t *tiledata = INTERNAL_VRAM+(((lcdc&0x10)?0x8000:0x9000)-V_INTERNAL_VRAM);
+	uint8_t scx=INTERNAL_IO[IO_SCX_R], scy=INTERNAL_IO[IO_SCY_R];
+
+	for(int y=0; y<144; y++){
+		for(int x=0; x<160; x++){
+			int map_y=(y+scy)%144, map_x=(x+scx)%160;
+            int tile_y=map_y>>3, tile_x=map_x>>3;
+            uint8_t *thisdata; //タイルパターンデータの開始アドレス
+            if(lcdc&0x10)
+				thisdata = tiledata + ((uint8_t)tilemap[tile_y*32+tile_x]*16);
+			else
+				thisdata = tiledata + ((int8_t)tilemap[tile_y*32+tile_x]*16);
+
+			int in_x=map_x%8, in_y=map_y%8;
+			uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
+			buf[(tile_y*8+in_y)*160 + tile_x*8+in_x] = colors[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
+		}
+	}
+}
+
+static void draw_window(uint8_t lcdc, Uint32 buf[]) {
 	/* not implemented */
-	int tiledata = ((lcdc&0x10)?0x8000:0x8800);
-	int tilemap = ((lcdc&0x8)?0x9c00:0x9800);
-	while(INTERNAL_IO[IO_LY_R]<143)
-		INC_LY;
 }
 
 static void draw_sprite(uint8_t lcdc, Uint32 buf[]) {
@@ -113,19 +141,19 @@ static void draw_sprite(uint8_t lcdc, Uint32 buf[]) {
 
 int main(int argc, char *argv[]) {
 	if(argc != 2){
-		fprintf(stderr, "too few argument\n");
+		printf("too few argument\n");
 		return -1;
 	}
 
 	uint8_t *rom = open_rom(argv[1]);
 	if(rom==NULL){
-		fprintf(stderr, "open_rom failed\n");
+		printf("open_rom failed\n");
 		return -1;
 	}
 
 	struct cartridge *cart = cart_init(rom);
 	if(cart == NULL){
-		fprintf(stderr, "cart_init failed\n");
+		printf("cart_init failed\n");
 		return -1;
 	}
 	struct gb_carthdr *hdr = cart_header(cart);
@@ -134,7 +162,7 @@ int main(int argc, char *argv[]) {
 
 	if(memory_init(cart)){
 		free(cart);
-		fprintf(stderr, "memory_init failed\n");
+		printf("memory_init failed\n");
 		return -1;
 	}
 
@@ -145,19 +173,24 @@ int main(int argc, char *argv[]) {
 		printf("SDL_CreateThread failed: %s\n", SDL_GetError());
 		memory_free();
 		return -1;
-	}else{
-		SDL_DetachThread(cpu_thread);
 	}
 
 
-	static Uint32 bgwin_buf[256*256];
+	//3つ使う必要ない（重ねればいい）と思われるので、描画関数を書き終えてから見直す
+	static Uint32 bg_buf[160*144];
+	static Uint32 win_buf[160*144];
 	static Uint32 sprite_buf[160*144];
-	SDL_Surface *bgwin_surface=SDL_CreateRGBSurfaceFrom((void *)bgwin_buf, 256, 256, 32, 256*4,
+	SDL_Surface *bg_surface=SDL_CreateRGBSurfaceFrom((void *)bg_buf, 160, 144, 32, 160*4,
+	       0x00ff0000,0x0000ff00,0x000000ff,0xff000000);
+	SDL_Surface *win_surface=SDL_CreateRGBSurfaceFrom((void *)win_buf, 160, 144, 32, 160*4,
 	       0x00ff0000,0x0000ff00,0x000000ff,0xff000000);
 	SDL_Surface *sprite_surface=SDL_CreateRGBSurfaceFrom((void *)sprite_buf, 160, 144, 32, 160*4,
 	       0x00ff0000,0x0000ff00,0x000000ff,0xff000000);
 
-	int quit=0;
+	static Uint32 colors[4];
+	for(int i=0; i<4; i++)
+		colors[i] = SDL_MapRGBA(bg_surface->format, ACTUALCOLOR[i].r, ACTUALCOLOR[i].g, ACTUALCOLOR[i].b, 255);
+
 	SDL_Event e;
 	Uint32 fps_timer;
 	int frame_count=0;
@@ -178,26 +211,39 @@ int main(int argc, char *argv[]) {
 			}
 		}
 
+		if(quit) break;
+
 		static char wndtitle[32];
 		int avgfps=frame_count/(TIMER_GET(fps_timer)/1000+1);
 		if(avgfps>2000000)
 			avgfps=0;
 		if(frame_count%60==0){
-			snprintf(wndtitle, 32, "FPS = %d", avgfps);
+			snprintf(wndtitle, 32, "%.16s  FPS = %d", hdr->title, avgfps);
 			SDL_SetWindowTitle(main_window, wndtitle);
 		}
 
 		SDL_SetRenderDrawColor(window_renderer, 0xff, 0xff, 0xff, 0xff);
 		SDL_RenderClear(window_renderer);
 
-		RST_LY;
-
 		uint8_t lcdc=INTERNAL_IO[IO_LCDC_R];
 		if(lcdc&0x80){
 			//LCDがON
-			if(lcdc&0x21){
-				draw_bg_and_win(lcdc, bgwin_buf);
-				SDL_Texture *texture = SDL_CreateTextureFromSurface(window_renderer, bgwin_surface);
+			RST_LY;
+			change_lcdmode(2); wait_cpuclk(83);
+			change_lcdmode(3); wait_cpuclk(175);
+
+			if(lcdc&0x1){
+				for(int i=0; i<1024; i++)
+					bg_buf[i] = colors[0];
+				draw_background(lcdc, bg_buf, colors);
+				SDL_Texture *texture = SDL_CreateTextureFromSurface(window_renderer, bg_surface);
+				SDL_RenderCopy(window_renderer, texture, NULL, NULL);
+				SDL_DestroyTexture(texture);
+			}
+			/*
+			if(lcdc&0x20){
+				draw_window(lcdc, win_buf);
+				SDL_Texture *texture = SDL_CreateTextureFromSurface(window_renderer, win_surface);
 				SDL_RenderCopy(window_renderer, texture, NULL, NULL);
 				SDL_DestroyTexture(texture);
 			}
@@ -206,20 +252,34 @@ int main(int argc, char *argv[]) {
 				SDL_Texture *texture = SDL_CreateTextureFromSurface(window_renderer, sprite_surface);
 				SDL_RenderCopy(window_renderer, texture, NULL, NULL);
 				SDL_DestroyTexture(texture);
-				while(INTERNAL_IO[IO_LY_R]<143)
-					INC_LY;
 			}
+			*/
+			INC_LY;
+			change_lcdmode(0); wait_cpuclk(207);
+
+			while(INTERNAL_IO[IO_LY_R]<143){
+				change_lcdmode(2); wait_cpuclk(83);
+				change_lcdmode(3); wait_cpuclk(175);
+				INC_LY;
+				change_lcdmode(0); wait_cpuclk(207);
+			}
+
+			INC_LY;
+			change_lcdmode(LCDMODE_VBLANK);
+			wait_cpuclk(4560);
 		}
 
-		INC_LY;
-		change_lcdmode(LCDMODE_VBLANK);
-		wait_cpuclk(4560);
 		SDL_RenderPresent(window_renderer);
-
 		frame_count++;
-		while(INTERNAL_IO[IO_LY_R]<152)
-			INC_LY;
+
+		if(lcdc&0x80){
+			while(INTERNAL_IO[IO_LY_R]<152)
+				INC_LY;
+		}
 	}
+
+	cpu_post_all_semaphore();
+	SDL_WaitThread(cpu_thread, NULL);
 
 	SDL_DestroyRenderer(window_renderer);
 	window_renderer = NULL;

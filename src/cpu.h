@@ -1,6 +1,10 @@
 #pragma once
 
+extern int quit;
+
 void startup(void);
+void cpu_post_all_semaphore();
+void wait_cpuclk(int clk);
 void request_interrupt(uint8_t type);
 int cpu_exec(void *ptr);
 int disas_one(uint16_t pc);

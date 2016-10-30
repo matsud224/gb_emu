@@ -92,7 +92,7 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 								}
 								break;
 							case IO_IF_R: CAS_UPDATE(REG_IF, value); break;
-							case IO_LCDC_R: INTERNAL_IO[IO_LCDC_R]=value; break;
+							case IO_LCDC_R: INTERNAL_IO[IO_LCDC_R]=value; printf("LCDC=0x%X\n", value); break;
 							case IO_STAT_R: INTERNAL_IO[IO_STAT_R]=value; break;
 							case IO_SCY_R: INTERNAL_IO[IO_SCY_R]=value; break;
 							case IO_SCX_R: INTERNAL_IO[IO_SCX_R]=value; break;
@@ -137,6 +137,7 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 			}else{
 				//INTERNAL_VRAM
 				INTERNAL_VRAM[dst-V_INTERNAL_VRAM] = value;
+				if(dst>=0x9800) printf("VRAM access: VRAM[0x%X]=0x%X\n", dst, value);
 			}
 		}
 	}else{

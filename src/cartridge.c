@@ -33,13 +33,13 @@ struct cartridge *cart_init(uint8_t *rom) {
 
 	if(cart->header.cgbflag == CGBFLAG_CGBONLY) {
 		free(cart);
-		fprintf(stderr, "cart_init: cgb only\n");
+		printf("cart_init: cgb only\n");
 		return NULL;
 	}
 
 	if(memcmp(cart->header.logo, VALID_LOGO, sizeof(VALID_LOGO))!=0) {
 		free(cart);
-		fprintf(stderr, "cart_init: header logo is invalid.\n");
+		printf("cart_init: header logo is invalid.\n");
 		return NULL;
 	}
 
@@ -56,7 +56,7 @@ struct cartridge *cart_init(uint8_t *rom) {
 		cart->mbc1_mode = 0;
 		break;
 	default:
-		fprintf(stderr, "cart_init: catridge type 0x%x is not supported.\n", cart->header.carttype);
+		printf("cart_init: catridge type 0x%x is not supported.\n", cart->header.carttype);
 		free(cart);
 		return NULL;
 	}
@@ -76,12 +76,14 @@ static void update_mapping(struct cartridge *cart) {
 			uint8_t romnum = cart->banknum&0x7f;
 			if(romnum==0x0 || romnum==0x20 || romnum==0x40 || romnum==0x60)
 				romnum++;
+			//printf("bank changed(16/8): %d\n", cart->banknum);
             cart->romn = cart->rom + (0x4000*romnum);
 		}else{
 			//RAM Banking Mode
 			uint8_t romnum = cart->banknum&0x1f;
 			if(romnum==0x0 || romnum==0x20 || romnum==0x40 || romnum==0x60)
 				romnum++;
+			//printf("bank changed(4/32): %d\n", cart->banknum);
 			cart->romn = cart->rom + (0x4000*romnum);
 		}
 		break;

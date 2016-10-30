@@ -13,7 +13,7 @@
     #define DISAS_PRINT( fmt, ... ) ((void)0)
 #else
     #define DISAS_PRINT( fmt, ... ) \
-        fprintf( stderr, \
+        fprintf( stdout, \
                   fmt "\n", \
                   ##__VA_ARGS__ \
         )
@@ -64,8 +64,8 @@ static uint8_t const p_table[] = {0x00, 0x08, 0x10, 0x18, 0x20, 0x28, 0x30, 0x38
 union reg16 {
 	uint16_t hl;
 	struct {
-		uint8_t h;
 		uint8_t l;
+		uint8_t h;
 	} v;
 };
 
@@ -92,18 +92,18 @@ uint32_t FLG_Z, FLG_N, FLG_H, FLG_C, FLG_IME;
 #define FLG_C_01 (!!FLG_C)
 
 #define SETZ (FLG_Z=!(cr&0xff))
-#define SETH_CARRY(src) (FLG_H=(((src)&0xf)+(cr&0xf))&0x10)
-#define SETH_BORROW(src) (FLG_H=!((((src)&0xf)+(cr&0xf))&0x10))
-#define SETC_CARRY (FLG_C=(cr&0x1000))
-#define SETC_BORROW (FLG_C=!(cr&0x1000))
+#define SETH_CARRY(a,b) (FLG_H=(((a)&0xf)+((b)&0xf))&0x10)
+#define SETH_BORROW(a,b) (FLG_H=!((((a)&0xf)+((b)&0xf))&0x10))
+#define SETC_CARRY (FLG_C=(cr&0x100))
+#define SETC_BORROW (FLG_C=!(cr&0x100))
 
-#define BINOPA_ADD(v) (cr=REG_A + (v), FLG_N=0, SETZ, SETH_CARRY(REG_A), SETC_CARRY, REG_A=cr)
-#define BINOPA_SUB(v) (cr=REG_A - (v), FLG_N=1, SETZ, SETH_BORROW(REG_A), SETC_BORROW, REG_A=cr)
-#define BINOPA_CP(v) (cr=REG_A-(v), FLG_N=1, SETZ, SETH_BORROW(REG_A), SETC_BORROW)
-#define INC(target) (cr=target + 1, FLG_N=0, SETZ, SETH_CARRY(target), target=cr)
-#define INC_HL (tmp2=memory_read8(REG_HL), cr=tmp2 + 1, FLG_N=0, SETZ, SETH_CARRY(tmp2), memory_write8(REG_HL, cr))
-#define DEC(target) (cr=target - 1, FLG_N=1, SETZ, SETH_BORROW(target), target=cr)
-#define DEC_HL (tmp2=memory_read8(REG_HL), cr=tmp2 - 1, FLG_N=1, SETZ, SETH_BORROW(tmp2), memory_write8(REG_HL, cr))
+#define BINOPA_ADD(v) (cr=REG_A + (v), FLG_N=0, SETZ, SETH_CARRY(REG_A,(v)), SETC_CARRY, REG_A=cr)
+#define BINOPA_SUB(v) (cr=REG_A - (v), FLG_N=1, SETZ, SETH_BORROW(REG_A,(int8_t)(-(v))), SETC_BORROW, REG_A=cr)
+#define BINOPA_CP(v) (cr=REG_A-(v), FLG_N=1, SETZ, SETH_BORROW(REG_A,(int8_t)(-(v))), SETC_BORROW)
+#define INC(target) (cr=target + 1, FLG_N=0, SETZ, SETH_CARRY(target,1), target=cr)
+#define INC_HL (tmp2=memory_read8(REG_HL), cr=tmp2 + 1, FLG_N=0, SETZ, SETH_CARRY(tmp2,1), memory_write8(REG_HL, cr))
+#define DEC(target) (cr=target - 1, FLG_N=1, SETZ, SETH_BORROW(target,(int8_t)(-1)), target=cr)
+#define DEC_HL (tmp2=memory_read8(REG_HL), cr=tmp2 - 1, FLG_N=1, SETZ, SETH_BORROW(tmp2,(int8_t)(-1)), memory_write8(REG_HL, cr))
 #define BINOPA_LOGIC(op, v, n, h) (REG_A=REG_A op (v), FLG_N=(n), FLG_H=(h), FLG_Z=!REG_A, FLG_C=0)
 
 #define RLCA (cr=REG_A<<1, FLG_N=0, FLG_H=0, SETC_CARRY, REG_A=cr+FLG_C_01, FLG_Z=0)
@@ -141,7 +141,7 @@ uint32_t FLG_Z, FLG_N, FLG_H, FLG_C, FLG_IME;
 #define JP(va) (REG_PC=(va))
 #define CALL(next_inst) (memory_write16(REG_SP-2, (next_inst)), REG_SP-=2, REG_PC=OPERAND16)
 #define CALL_ADDR(addr, next_inst) (memory_write16(REG_SP-2, (next_inst)), REG_SP-=2, REG_PC=(addr))
-#define RST(va) (memory_write16(REG_SP-2, REG_PC), REG_PC=(va), REG_SP-=2)
+#define RST(va) (memory_write16(REG_SP-2, REG_PC+1), REG_PC=(va), REG_SP-=2)
 
 #define RET (REG_PC=memory_read16(REG_SP), REG_SP+=2)
 
@@ -150,8 +150,8 @@ uint32_t FLG_Z, FLG_N, FLG_H, FLG_C, FLG_IME;
 #define PUSH_AF (tmp=REG_A<<8, tmp|=(FLG_Z<<7|FLG_N<<6|FLG_H<<5|FLG_C_01<<4), memory_write16(REG_SP-2, tmp), REG_SP-=2)
 #define POP_AF (REG_A=memory_read8(REG_SP+1), tmp=memory_read8(REG_SP), FLG_Z=tmp&0x80, FLG_N=((tmp&0x40)==0x40), FLG_H=((tmp&0x20)==0x20), FLG_C=((tmp&0x10)==0x10), REG_SP+=2)
 
-#define ADDHL_16(v) (tmp=REG_HL, cr=REG_HL+(v), FLG_N=0, FLG_C=REG_HL&0x10000, FLG_H=(((v)&0xfff)+(tmp&0xfff))&0x1000, REG_HL=cr)
-#define ADDSP_16 (tmp=REG_SP, REG_SP+=(int8_t)(OPERAND8), FLG_Z=0, FLG_N=0, FLG_C=REG_SP&0x10000, FLG_H=((OPERAND8&0xfff)+(tmp&0xfff))&0x1000)
+#define ADDHL_16(v) (cr=REG_HL+(v), FLG_N=0, FLG_C=cr&0x10000, FLG_H=(((v)&0xfff)+(REG_HL&0xfff))&0x1000, REG_HL=cr)
+#define ADDSP_16 (cr=REG_SP+(int8_t)(OPERAND8), FLG_Z=0, FLG_N=0, FLG_C=cr&0x10000, FLG_H=((OPERAND8&0xfff)+(REG_SP&0xfff))&0x1000, REG_SP=cr)
 
 
 static SDL_sem *intwait_sem;
@@ -159,6 +159,14 @@ static SDL_sem *clkwait_sem;
 static int clkwait_remaining = 0;
 int is_haltmode = 0;
 int is_stopmode = 0;
+
+int quit = 0;
+
+
+//終了処理用
+void cpu_post_all_semaphore() {
+	SDL_SemPost(intwait_sem);
+}
 
 void startup() {
 	intwait_sem = SDL_CreateSemaphore(0);
@@ -170,6 +178,7 @@ void startup() {
 	REG_DE=0x00d8;
 	REG_HL=0x014d;
 	REG_SP=0xfffe;
+	FLG_IME=1; //???
 	memory_write8(0xff05, 0x00);
 	memory_write8(0xff06, 0x00);
 	memory_write8(0xff07, 0x00);
@@ -206,8 +215,10 @@ void startup() {
 }
 
 void wait_cpuclk(int clk) {
-	clkwait_remaining = clk/4; //1命令4クロックとする（だいたい合ってれば良さそうなので）
-	SDL_SemWait(clkwait_sem);
+	if(!(is_stopmode || is_haltmode)){
+		clkwait_remaining = clk/4; //1命令4クロックとする（だいたい合ってれば良さそうなので）
+		SDL_SemWait(clkwait_sem);
+	}
 }
 
 void request_interrupt(uint8_t type) {
@@ -221,14 +232,10 @@ void request_interrupt(uint8_t type) {
 int cpu_exec(void *ptr) {
 	uint32_t cr, tmp, tmp2;
 
-	while(1){
-		#ifdef SHOW_DISAS
-		fprintf(stderr, "PC=%X: ", REG_PC);
-		disas_one(REG_PC);
-		#endif // SHOW_DISAS
-
+	while(!quit){
 		//割り込みチェック
 		if(FLG_IME){
+			//printf("interrupt!\n");
 			uint8_t masked=REG_IF.value&REG_IE.value;
 			uint8_t cause = masked&(~masked + 1); //1になっている一番下の桁
 			if(cause){
@@ -243,6 +250,11 @@ int cpu_exec(void *ptr) {
 				}
 			}
 		}
+
+		#ifdef SHOW_DISAS
+			fprintf(stdout, "PC=%4X SP=%4X A=%2X BC=%2X DE=%2X HL=%4X IME=%d OP=%2X: ", REG_PC, REG_SP, REG_A, REG_BC, REG_DE, REG_HL, FLG_IME, memory_read8(REG_PC));
+			disas_one(REG_PC);
+		#endif // SHOW_DISAS
 
 		if(clkwait_remaining>0){
 			clkwait_remaining--;
@@ -270,6 +282,7 @@ int cpu_exec(void *ptr) {
 		case 0x10: /* STOP - ---- */
 			//TODO: LCDを白くする
 			is_stopmode = 1;
+			SDL_SemPost(clkwait_sem);
 			SDL_SemWait(intwait_sem);
 			REG_PC+=2;
 			continue;
@@ -282,13 +295,13 @@ int cpu_exec(void *ptr) {
 		case 0x17: /* RLA - 000C */  		RLA; REG_PC+=1; continue;
 		case 0x18: /* JR n ---- */  		JR; REG_PC+=2; continue;
 		case 0x19: /* ADD HL,DE -0HC */  	ADDHL_16(REG_DE); REG_PC+=1; continue;
-		case 0x1A: /* LD A,(DE) ---- */  	REG_A=memory_read8(REG_DE); REG_A = memory_read8(REG_DE); REG_PC+=1; continue;
+		case 0x1A: /* LD A,(DE) ---- */  	REG_A=memory_read8(REG_DE); REG_PC+=1; continue;
 		case 0x1B: /* DEC DE ---- */  		REG_DE--; REG_PC+=1; continue;
 		case 0x1C: /* INC E Z0H- */  		INC(REG_E); REG_PC+=1; continue;
 		case 0x1D: /* DEC E Z1H- */  		DEC(REG_E); REG_PC+=1; continue;
 		case 0x1E: /* LD E,n ---- */  		REG_E=OPERAND8; REG_PC+=2; continue;
 		case 0x1F: /* RRA - 000C */  		RRA; REG_PC+=1; continue;
-		case 0x20: /* JR NZ,* ---- */  		if(FLG_Z){JR;} REG_PC+=2; continue;
+		case 0x20: /* JR NZ,* ---- */  		if(!FLG_Z){JR;} REG_PC+=2; continue;
 		case 0x21: /* LD HL,nn ---- */  	REG_HL=OPERAND16; REG_PC+=3; continue;
 		case 0x22: /* LD (HL+),A ---- */  	memory_write8(REG_HL, REG_A); REG_HL++; REG_PC+=1; continue;
 		case 0x23: /* INC HL ---- */  		REG_HL++; REG_PC+=1; continue;
@@ -344,7 +357,7 @@ int cpu_exec(void *ptr) {
 				FLG_Z=!REG_A;
 				REG_PC+=1; continue;
 			}
-		case 0x28: /* JR Z,* ---- */  		if(!FLG_Z){JR;} REG_PC+=2; continue;
+		case 0x28: /* JR Z,* ---- */  		if(FLG_Z){JR;} REG_PC+=2; continue;
 		case 0x29: /* ADD HL,HL -0HC */  	ADDHL_16(REG_HL); REG_PC+=1; continue;
 		case 0x2A: /* LD A,(HL+) ---- */  	REG_A=memory_read8(REG_HL); REG_HL++; REG_PC+=1; continue;
 		case 0x2B: /* DEC HL ---- */  		REG_HL--; REG_PC+=1; continue;
@@ -424,6 +437,7 @@ int cpu_exec(void *ptr) {
 		case 0x75: /* LD (HL),L ---- */ 	memory_write8(REG_HL, REG_L); REG_PC+=1; continue;
 		case 0x76: /* HALT - ---- */
 			is_haltmode = 1;
+			SDL_SemPost(clkwait_sem);
 			SDL_SemWait(intwait_sem);
 			REG_PC+=1;
 			continue;
@@ -443,7 +457,7 @@ int cpu_exec(void *ptr) {
 		case 0x84: /* ADD A,H Z0HC */  		BINOPA_ADD(REG_H); REG_PC+=1; continue;
 		case 0x85: /* ADD A,L Z0HC */  		BINOPA_ADD(REG_L); REG_PC+=1; continue;
 		case 0x86: /* ADD A,(HL) Z0HC */  	BINOPA_ADD(memory_read8(REG_HL)); REG_PC+=1; continue;
-		case 0x87: /* ADD A,A Z0HC */  		BINOPA_ADD(REG_B); REG_PC+=1; continue;
+		case 0x87: /* ADD A,A Z0HC */  		BINOPA_ADD(REG_A); REG_PC+=1; continue;
 		case 0x88: /* ADC A,B Z0HC */  		BINOPA_ADD(REG_B+FLG_C_01); REG_PC+=1; continue;
 		case 0x89: /* ADC A,C Z0HC */  		BINOPA_ADD(REG_C+FLG_C_01); REG_PC+=1; continue;
 		case 0x8A: /* ADC A,D Z0HC */  		BINOPA_ADD(REG_D+FLG_C_01); REG_PC+=1; continue;
@@ -794,13 +808,13 @@ int cpu_exec(void *ptr) {
 		case 0xE6: /* AND # Z010 */  		BINOPA_LOGIC(&, OPERAND8, 0, 1); REG_PC+=2; continue;
 		case 0xE7: /* RST 20H ---- */  		RST(0x20); continue;
 		case 0xE8: /* ADD SP,n 00HC */  	ADDSP_16; REG_PC+=2; continue;
-		case 0xE9: /* JP (HL) ---- */  		JP(memory_read8(REG_HL)); continue;
+		case 0xE9: /* JP HL ---- */  		JP(REG_HL); continue;
 		case 0xEA: /* LD (nn),A ---- */  	memory_write8(OPERAND16, REG_A); REG_PC+=3; continue;
 		case 0xEE: /* XOR * Z000 */  		BINOPA_LOGIC(^, OPERAND8, 0, 0);REG_PC+=2; continue;
 		case 0xEF: /* RST 28H ---- */  		RST(0x28); continue;
-		case 0xF0: /* LD A,($FF00+n) ---- */REG_A=0xff00+OPERAND8; REG_PC+=2; continue;
+		case 0xF0: /* LD A,($FF00+n) ---- */REG_A=memory_read8(0xff00+OPERAND8); REG_PC+=2; continue;
 		case 0xF1: /* POP AF ---- */  		POP_AF; REG_PC+=1; continue;
-		case 0xF2: /* LD A,($FF00+C) ---- */REG_A=0xff00+REG_C; REG_PC+=1; continue;
+		case 0xF2: /* LD A,($FF00+C) ---- */REG_A=memory_read8(0xff00+REG_C); REG_PC+=1; continue;
 		case 0xF3: /* DI - ---- */  		FLG_IME=0; REG_PC+=1; continue;
 		case 0xF5: /* PUSH AF ---- */  		PUSH_AF; REG_PC+=1; continue;
 		case 0xF6: /* OR # Z000 */  		BINOPA_LOGIC(|, OPERAND8, 0, 0);REG_PC+=2; continue;
@@ -810,7 +824,7 @@ int cpu_exec(void *ptr) {
 		case 0xFA: /* LD A,(nn) ---- */  	REG_A=memory_read8(OPERAND16); REG_PC+=3; continue;
 		case 0xFB: /* EI - ---- */  		FLG_IME=1; REG_PC+=1; continue;
 		case 0xFE: /* CP # Z1HC */  		BINOPA_CP(OPERAND8); REG_PC+=2; continue;
-		case 0xFF: /* RST 38H ---- */  		RST(0x38); continue;
+		case 0xFF: /* RST 38H ---- */		RST(0x38); printf("warning: RST 38H!!!\n"); continue;
 		}
 	}
 
@@ -1181,7 +1195,7 @@ int disas_one(uint16_t pc) {
 				return 1;
 			}else{
 				//LD dd,nn
-				DISAS_PRINT("LD %s,%hX", dd_name[BIT5_4(memory_read8(pc))], memory_read8(pc+1));
+				DISAS_PRINT("LD %s,%hX", dd_name[BIT5_4(memory_read8(pc))], memory_read16(pc+1));
 				return 2;
 			}
 			break;
