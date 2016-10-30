@@ -105,11 +105,12 @@ struct RGB ACTUALCOLOR[4] = {{222,249,208},
 							 {139,192,112},
 							 {68,100,59},
 							 {36,54,31}};
+Uint32 ABSCOLOR[4];
 
 #define PALETTE(p,n) ((INTERNAL_IO[p]>>(n))&0x3)
 #define BGPALETTE(n) ((INTERNAL_IO[IO_BGP_R]>>((n)<<1))&0x3)
 
-static void draw_background(uint8_t lcdc, Uint32 buf[], Uint32 colors[]) {
+static void draw_background(uint8_t lcdc, Uint32 buf[]) {
 	uint8_t *tilemap = INTERNAL_VRAM+(((lcdc&0x8)?0x9c00:0x9800)-V_INTERNAL_VRAM);
 	uint8_t *tiledata = INTERNAL_VRAM+(((lcdc&0x10)?0x8000:0x9000)-V_INTERNAL_VRAM);
 	uint8_t scx=INTERNAL_IO[IO_SCX_R], scy=INTERNAL_IO[IO_SCY_R];
@@ -126,17 +127,71 @@ static void draw_background(uint8_t lcdc, Uint32 buf[], Uint32 colors[]) {
 
 			int in_x=map_x%8, in_y=map_y%8;
 			uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
-			buf[y*160 + x] = colors[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
+			buf[y*160 + x] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
 		}
 	}
 }
 
 static void draw_window(uint8_t lcdc, Uint32 buf[]) {
-	/* not implemented */
+	uint8_t *tilemap = INTERNAL_VRAM+(((lcdc&0x40)?0x9c00:0x9800)-V_INTERNAL_VRAM);
+	uint8_t *tiledata = INTERNAL_VRAM+(((lcdc&0x10)?0x8000:0x9000)-V_INTERNAL_VRAM);
+	int wx=INTERNAL_IO[IO_WX_R]-7, wy=INTERNAL_IO[IO_WY_R];
+
+	for(int y=0; y<144; y++){
+		for(int x=0; x<160; x++){
+			if(x<wx || y<wy) continue;
+			int map_y=y-wy, map_x=x-wx;
+            int tile_y=map_y>>3, tile_x=map_x>>3;
+            uint8_t *thisdata; //タイルパターンデータの開始アドレス
+            if(lcdc&0x10)
+				thisdata = tiledata + ((uint8_t)tilemap[tile_y*32+tile_x]*16);
+			else
+				thisdata = tiledata + ((int8_t)tilemap[tile_y*32+tile_x]*16);
+
+			int in_x=map_x%8, in_y=map_y%8;
+			uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
+			buf[y*160 + x] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
+		}
+	}
 }
 
 static void draw_sprite(uint8_t lcdc, Uint32 buf[]) {
-	/* not implemented */
+	uint8_t *tiledata = INTERNAL_VRAM+(0x8000-V_INTERNAL_VRAM);
+	uint8_t *oam_termial = INTERNAL_OAM+(4*40);
+	for(uint8_t *attr=INTERNAL_OAM; attr<oam_termial; attr+=4){
+        int sp_y=attr[0]-16, sp_x=attr[1]-8;
+        uint8_t flags=attr[3];
+//printf("sprite: %d,%d(#%X)\n", sp_x, sp_y, attr[2]);
+		if(sp_y==-16 || sp_y>=144 || sp_x==-8 || sp_x>=160)
+			continue;
+
+		if(lcdc&0x4){
+			//8x16 mode
+			uint8_t *upperdata = tiledata + (attr[2]&0xfe)*16;
+			uint8_t *lowerdata = tiledata + (attr[2]|0x01)*16;
+			for(int y=0; y<16; y++){
+				for(int x=0; x<8; x++){
+					int scr_y=sp_y+y, scr_x=sp_x+x;
+					if(scr_y<0 || scr_y>=144 || scr_x<0 || scr_x>=160)
+						continue;
+					uint8_t lower=(y&0x8?lowerdata:upperdata)[y*2], upper=(y&0x8?lowerdata:upperdata)[y*2+1];
+					buf[scr_y*160 + scr_x] = ABSCOLOR[BGPALETTE(((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1))];
+				}
+			}
+		}else{
+			//8x8 mode
+			uint8_t *thisdata = tiledata + attr[2]*16;
+			for(int y=0; y<8; y++){
+				for(int x=0; x<8; x++){
+					int scr_y=sp_y+y, scr_x=sp_x+x;
+					if(scr_y<0 || scr_y>=144 || scr_x<0 || scr_x>=160)
+						continue;
+					uint8_t lower=thisdata[y*2], upper=thisdata[y*2+1];
+					buf[scr_y*160 + scr_x] = ABSCOLOR[BGPALETTE(((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1))];
+				}
+			}
+		}
+	}
 }
 
 int main(int argc, char *argv[]) {
@@ -175,21 +230,13 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 
-
 	//3つ使う必要ない（重ねればいい）と思われるので、描画関数を書き終えてから見直す
-	static Uint32 bg_buf[160*144];
-	static Uint32 win_buf[160*144];
-	static Uint32 sprite_buf[160*144];
-	SDL_Surface *bg_surface=SDL_CreateRGBSurfaceFrom((void *)bg_buf, 160, 144, 32, 160*4,
-	       0x00ff0000,0x0000ff00,0x000000ff,0xff000000);
-	SDL_Surface *win_surface=SDL_CreateRGBSurfaceFrom((void *)win_buf, 160, 144, 32, 160*4,
-	       0x00ff0000,0x0000ff00,0x000000ff,0xff000000);
-	SDL_Surface *sprite_surface=SDL_CreateRGBSurfaceFrom((void *)sprite_buf, 160, 144, 32, 160*4,
+	static Uint32 bitmap[160*144];
+	SDL_Surface *bitmap_surface=SDL_CreateRGBSurfaceFrom((void *)bitmap, 160, 144, 32, 160*4,
 	       0x00ff0000,0x0000ff00,0x000000ff,0xff000000);
 
-	static Uint32 colors[4];
 	for(int i=0; i<4; i++)
-		colors[i] = SDL_MapRGBA(bg_surface->format, ACTUALCOLOR[i].r, ACTUALCOLOR[i].g, ACTUALCOLOR[i].b, 255);
+		ABSCOLOR[i] = SDL_MapRGBA(bitmap_surface->format, ACTUALCOLOR[i].r, ACTUALCOLOR[i].g, ACTUALCOLOR[i].b, 255);
 
 	SDL_Event e;
 	Uint32 fps_timer;
@@ -235,8 +282,6 @@ int main(int argc, char *argv[]) {
 
 		static char wndtitle[32];
 		int avgfps=frame_count/(TIMER_GET(fps_timer)/1000+1);
-		if(avgfps>2000000)
-			avgfps=0;
 		if(frame_count%60==0){
 			snprintf(wndtitle, 32, "%.16s  FPS = %d", hdr->title, avgfps);
 			SDL_SetWindowTitle(main_window, wndtitle);
@@ -252,26 +297,21 @@ int main(int argc, char *argv[]) {
 			change_lcdmode(2); wait_cpuclk(83);
 			change_lcdmode(3); wait_cpuclk(175);
 
-			if(lcdc&0x1){
-				draw_background(lcdc, bg_buf, colors);
-				SDL_Texture *texture = SDL_CreateTextureFromSurface(window_renderer, bg_surface);
-				SDL_RenderCopy(window_renderer, texture, NULL, NULL);
-				SDL_DestroyTexture(texture);
-			}
-			/*
-			if(lcdc&0x20){
-				draw_window(lcdc, win_buf);
-				SDL_Texture *texture = SDL_CreateTextureFromSurface(window_renderer, win_surface);
-				SDL_RenderCopy(window_renderer, texture, NULL, NULL);
-				SDL_DestroyTexture(texture);
-			}
-			if(lcdc&0x2){
-				draw_sprite(lcdc, sprite_buf);
-				SDL_Texture *texture = SDL_CreateTextureFromSurface(window_renderer, sprite_surface);
-				SDL_RenderCopy(window_renderer, texture, NULL, NULL);
-				SDL_DestroyTexture(texture);
-			}
-			*/
+			if(lcdc&0x1)
+				draw_background(lcdc, bitmap);
+			else
+				for(int i=0; i<1024; i++)
+					bitmap[i] = ABSCOLOR[0];
+
+			if(lcdc&0x20)
+				draw_window(lcdc, bitmap);
+			if(lcdc&0x2)
+				draw_sprite(lcdc, bitmap);
+
+			SDL_Texture *texture = SDL_CreateTextureFromSurface(window_renderer, bitmap_surface);
+			SDL_RenderCopy(window_renderer, texture, NULL, NULL);
+			SDL_DestroyTexture(texture);
+
 			INC_LY;
 			change_lcdmode(0); wait_cpuclk(207);
 

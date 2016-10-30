@@ -38,6 +38,7 @@ int memory_init(struct cartridge *c) {
 	if((INTERNAL_STACK = malloc(sizeof(uint8_t) * 0x7f)) == NULL) goto err;
 	clock_gettime(CLOCK_MONOTONIC, &div_origin);
 	LCDMODE = LCDMODE_VBLANK;
+	REG_IF.value=0;
 	return 0;
 err:
 	memory_free();
@@ -94,18 +95,18 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 								}
 								break;
 							case IO_IF_R: CAS_UPDATE(REG_IF, value); break;
-							case IO_LCDC_R: INTERNAL_IO[IO_LCDC_R]=value; printf("LCDC=0x%X\n", value); break;
+							case IO_LCDC_R: INTERNAL_IO[IO_LCDC_R]=value; break;
 							case IO_STAT_R: INTERNAL_IO[IO_STAT_R]=value; break;
-							case IO_SCY_R: INTERNAL_IO[IO_SCY_R]=value; printf("SCY=%d\n", value); break;
-							case IO_SCX_R: INTERNAL_IO[IO_SCX_R]=value; printf("SCX=%d\n", value); break;
+							case IO_SCY_R: INTERNAL_IO[IO_SCY_R]=value; break;
+							case IO_SCX_R: INTERNAL_IO[IO_SCX_R]=value; break;
 							case IO_LY_R: break;
 							case IO_LYC_R: INTERNAL_IO[IO_LYC_R]=value; break;
 							case IO_DMA_R:
 								{
 									uint16_t start=(value)<<8, end=(start|0x9f);
-									uint16_t oam_dst=0xfe00;
+									int oam_dst=0;
 									for(; start<=end; start++)
-										memory_write8(oam_dst++, memory_read8(start));
+										INTERNAL_OAM[oam_dst++] = memory_read8(start);
 								}
 								break;
 							case IO_BGP_R: INTERNAL_IO[IO_BGP_R]=value; break;

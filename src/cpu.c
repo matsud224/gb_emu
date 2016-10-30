@@ -7,7 +7,7 @@
 #include "SDL2/SDL_atomic.h"
 #include "SDL2/SDL_mutex.h"
 
-//#define SHOW_DISAS
+#define SHOW_DISAS
 
 #ifndef SHOW_DISAS
     #define DISAS_PRINT( fmt, ... ) ((void)0)
@@ -152,6 +152,7 @@ uint32_t FLG_Z, FLG_N, FLG_H, FLG_C, FLG_IME;
 
 #define ADDHL_16(v) (cr=REG_HL+(v), FLG_N=0, FLG_C=cr&0x10000, FLG_H=(((v)&0xfff)+(REG_HL&0xfff))&0x1000, REG_HL=cr)
 #define ADDSP_16 (cr=REG_SP+(int8_t)(OPERAND8), FLG_Z=0, FLG_N=0, FLG_C=cr&0x10000, FLG_H=((OPERAND8&0xfff)+(REG_SP&0xfff))&0x1000, REG_SP=cr)
+#define ADDHLSP_16 (cr=REG_SP+(int8_t)(OPERAND8), FLG_Z=0, FLG_N=0, FLG_C=cr&0x10000, FLG_H=((OPERAND8&0xfff)+(REG_SP&0xfff))&0x1000, REG_HL=cr)
 
 
 static SDL_sem *intwait_sem;
@@ -236,7 +237,6 @@ int cpu_exec(void *ptr) {
 	while(!quit){
 		//割り込みチェック
 		if(FLG_IME){
-			//printf("interrupt!\n");
 			uint8_t masked=REG_IF.value&REG_IE.value;
 			uint8_t cause = masked&(~masked + 1); //1になっている一番下の桁
 			if(cause){
@@ -347,13 +347,15 @@ int cpu_exec(void *ptr) {
 				}
 				if(FLG_N){
 					REG_A-=diff;
-					if(FLG_H)
+					/*if(FLG_H)
 						FLG_H=(low<0x6);
 					else
-						FLG_H=0;
+						FLG_H=0;*/
+					FLG_H=0;
 				}else{
 					REG_A+=diff;
-					FLG_H=(low>0x9);
+					FLG_H=0;
+					//FLG_H=(low>0x9);
 				}
 				FLG_Z=!REG_A;
 				REG_PC+=1; continue;
@@ -374,7 +376,7 @@ int cpu_exec(void *ptr) {
 		case 0x35: /* DEC (HL) Z1H- */  	DEC_HL; REG_PC+=1; continue;
 		case 0x36: /* LD (HL),n ---- */  	memory_write8(REG_HL, OPERAND8); REG_PC+=2; continue;
 		case 0x37: /* SCF - -001 */  		FLG_C=1; FLG_H=0; FLG_N=0; REG_PC+=1; continue;
-		case 0x38: /* JR C,* ---- */  		if(FLG_C){JR;} REG_PC+=1; continue;
+		case 0x38: /* JR C,* ---- */  		if(FLG_C){JR;} REG_PC+=2; continue;
 		case 0x39: /* ADD HL,SP -0HC */  	ADDHL_16(REG_SP); REG_PC+=1; continue;
 		case 0x3A: /* LD A,(HL-) ---- */  	REG_A=memory_read8(REG_HL); REG_HL--; REG_PC+=1; continue;
 		case 0x3B: /* DEC SP ---- */  		REG_SP--;  REG_PC+=1; continue;
@@ -820,7 +822,7 @@ int cpu_exec(void *ptr) {
 		case 0xF5: /* PUSH AF ---- */  		PUSH_AF; REG_PC+=1; continue;
 		case 0xF6: /* OR # Z000 */  		BINOPA_LOGIC(|, OPERAND8, 0, 0);REG_PC+=2; continue;
 		case 0xF7: /* RST 30H ---- */  		RST(0x30); continue;
-		case 0xF8: /* LDHL SP,n 00HC */  	REG_HL=REG_SP+(int8_t)(OPERAND8); REG_PC+=2; continue;
+		case 0xF8: /* LDHL SP,n 00HC */  	ADDHLSP_16; REG_PC+=2; continue;
 		case 0xF9: /* LD SP,HL ---- */  	REG_SP=REG_HL; REG_PC+=1; continue;
 		case 0xFA: /* LD A,(nn) ---- */  	REG_A=memory_read8(OPERAND16); REG_PC+=3; continue;
 		case 0xFB: /* EI - ---- */  		FLG_IME=1; REG_PC+=1; continue;
@@ -1178,15 +1180,15 @@ int disas_one(uint16_t pc) {
 			case 0x6:
 				//JR NC,e
 				DISAS_PRINT("JR NC,%hhX", memory_read8(pc+1)+2);
-				return 1;
+				return 2;
 			case 0x5:
 				//JR Z,e
 				DISAS_PRINT("JR Z,%hhX", memory_read8(pc+1)+2);
-				return 1;
+				return 2;
 			case 0x4:
 				//JR NZ,e
 				DISAS_PRINT("JR NZ,%hhX", memory_read8(pc+1)+2);
-				return 1;
+				return 2;
 			}
 			break;
 		case 0x1:
