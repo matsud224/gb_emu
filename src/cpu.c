@@ -7,7 +7,7 @@
 #include "SDL2/SDL_atomic.h"
 #include "SDL2/SDL_mutex.h"
 
-#define SHOW_DISAS
+//#define SHOW_DISAS
 
 #ifndef SHOW_DISAS
     #define DISAS_PRINT( fmt, ... ) ((void)0)
@@ -89,21 +89,22 @@ uint32_t FLG_Z, FLG_N, FLG_H, FLG_C, FLG_IME;
 
 #define OPERAND8 (memory_read8(REG_PC+1))
 #define OPERAND16 (((memory_read8(REG_PC+2))<<8) | (memory_read8(REG_PC+1)))
-#define FLG_C_01 (!!FLG_C)
+#define FLG_C_01 (FLG_C!=0)
 
 #define SETZ (FLG_Z=!(cr&0xff))
 #define SETH_CARRY(a,b) (FLG_H=(((a)&0xf)+((b)&0xf))&0x10)
-#define SETH_BORROW(a,b) (FLG_H=!((((a)&0xf)+((b)&0xf))&0x10))
+#define SETH_BORROW(a,b) (FLG_H=((((a)&0xf)-((b)&0xf))&0x10))
 #define SETC_CARRY (FLG_C=(cr&0x100))
-#define SETC_BORROW (FLG_C=!(cr&0x100))
+#define SETC_BORROW (FLG_C=(cr&0x100))
 
 #define BINOPA_ADD(v) (cr=REG_A + (v), FLG_N=0, SETZ, SETH_CARRY(REG_A,(v)), SETC_CARRY, REG_A=cr)
-#define BINOPA_SUB(v) (cr=REG_A - (v), FLG_N=1, SETZ, SETH_BORROW(REG_A,(int8_t)(-(v))), SETC_BORROW, REG_A=cr)
-#define BINOPA_CP(v) (cr=REG_A-(v), FLG_N=1, SETZ, SETH_BORROW(REG_A,(int8_t)(-(v))), SETC_BORROW)
+//SBCでの注意: REG_A-(r+FLG_C)=REG_A-r-FLG_C
+#define BINOPA_SUB(v) (cr=REG_A - (v), FLG_N=1, SETZ, SETH_BORROW(REG_A, v), SETC_BORROW, REG_A=cr)
+#define BINOPA_CP(v) (cr=REG_A-(v), FLG_N=1, SETZ, SETH_BORROW(REG_A, v), SETC_BORROW)
 #define INC(target) (cr=target + 1, FLG_N=0, SETZ, SETH_CARRY(target,1), target=cr)
 #define INC_HL (tmp2=memory_read8(REG_HL), cr=tmp2 + 1, FLG_N=0, SETZ, SETH_CARRY(tmp2,1), memory_write8(REG_HL, cr))
-#define DEC(target) (cr=target - 1, FLG_N=1, SETZ, SETH_BORROW(target,(int8_t)(-1)), target=cr)
-#define DEC_HL (tmp2=memory_read8(REG_HL), cr=tmp2 - 1, FLG_N=1, SETZ, SETH_BORROW(tmp2,(int8_t)(-1)), memory_write8(REG_HL, cr))
+#define DEC(target) (cr=target - 1, FLG_N=1, SETZ, SETH_BORROW(target, 1), target=cr)
+#define DEC_HL (tmp2=memory_read8(REG_HL), cr=tmp2 - 1, FLG_N=1, SETZ, SETH_BORROW(tmp2, 1), memory_write8(REG_HL, cr))
 #define BINOPA_LOGIC(op, v, n, h) (REG_A=REG_A op (v), FLG_N=(n), FLG_H=(h), FLG_Z=!REG_A, FLG_C=0)
 
 #define RLCA (cr=REG_A<<1, FLG_N=0, FLG_H=0, SETC_CARRY, REG_A=cr+FLG_C_01, FLG_Z=0)
@@ -311,6 +312,7 @@ int cpu_exec(void *ptr) {
 		case 0x26: /* LD H,n ---- */  		REG_H=OPERAND8; REG_PC+=2; continue;
 		case 0x27: /* DAA - Z-HC */
 			{
+				puts("DAA");
 				uint8_t high=REG_A>>4, low=REG_A&0xf;
 				uint8_t diff;
 				if(FLG_C){
@@ -477,14 +479,14 @@ int cpu_exec(void *ptr) {
 		case 0x95: /* SUB L Z1HC */ 		BINOPA_SUB(REG_L); REG_PC+=1; continue;
 		case 0x96: /* SUB (HL) Z1HC */  	BINOPA_SUB(memory_read8(REG_HL)); REG_PC+=1; continue;
 		case 0x97: /* SUB A Z1HC */  		BINOPA_SUB(REG_A); REG_PC+=1; continue;
-		case 0x98: /* SBC A,B Z1HC */  		BINOPA_SUB(REG_B-FLG_C_01); REG_PC+=1; continue;
-		case 0x99: /* SBC A,C Z1HC */  		BINOPA_SUB(REG_C-FLG_C_01); REG_PC+=1; continue;
-		case 0x9A: /* SBC A,D Z1HC */  		BINOPA_SUB(REG_D-FLG_C_01); REG_PC+=1; continue;
-		case 0x9B: /* SBC A,E Z1HC */  		BINOPA_SUB(REG_E-FLG_C_01); REG_PC+=1; continue;
-		case 0x9C: /* SBC A,H Z1HC */  		BINOPA_SUB(REG_H-FLG_C_01); REG_PC+=1; continue;
-		case 0x9D: /* SBC A,L Z1HC */  		BINOPA_SUB(REG_L-FLG_C_01); REG_PC+=1; continue;
-		case 0x9E: /* SBC A,(HL) Z1HC */  	BINOPA_SUB(memory_read8(REG_HL)-FLG_C_01); REG_PC+=1; continue;
-		case 0x9F: /* SBC A,A Z1HC */  		BINOPA_SUB(REG_A-FLG_C_01); REG_PC+=1; continue;
+		case 0x98: /* SBC A,B Z1HC */  		BINOPA_SUB(REG_B+FLG_C_01); REG_PC+=1; continue;
+		case 0x99: /* SBC A,C Z1HC */  		BINOPA_SUB(REG_C+FLG_C_01); REG_PC+=1; continue;
+		case 0x9A: /* SBC A,D Z1HC */  		BINOPA_SUB(REG_D+FLG_C_01); REG_PC+=1; continue;
+		case 0x9B: /* SBC A,E Z1HC */  		BINOPA_SUB(REG_E+FLG_C_01); REG_PC+=1; continue;
+		case 0x9C: /* SBC A,H Z1HC */  		BINOPA_SUB(REG_H+FLG_C_01); REG_PC+=1; continue;
+		case 0x9D: /* SBC A,L Z1HC */  		BINOPA_SUB(REG_L+FLG_C_01); REG_PC+=1; continue;
+		case 0x9E: /* SBC A,(HL) Z1HC */  	BINOPA_SUB(memory_read8(REG_HL)+FLG_C_01); REG_PC+=1; continue;
+		case 0x9F: /* SBC A,A Z1HC */  		BINOPA_SUB(REG_A+FLG_C_01); REG_PC+=1; continue;
 		case 0xA0: /* AND B Z010 */  		BINOPA_LOGIC(&, REG_B, 0, 1); REG_PC+=1; continue;
 		case 0xA1: /* AND C Z010 */  		BINOPA_LOGIC(&, REG_C, 0, 1); REG_PC+=1; continue;
 		case 0xA2: /* AND D Z010 */  		BINOPA_LOGIC(&, REG_D, 0, 1); REG_PC+=1; continue;
@@ -802,7 +804,7 @@ int cpu_exec(void *ptr) {
 		case 0xD9: /* RETI - ---- */ 		RET; FLG_IME=1; continue;
 		case 0xDA: /* JP C,nn ---- */  		if(FLG_C){JP(OPERAND16);}else{REG_PC+=3;} continue;
 		case 0xDC: /* CALL C,nn ---- */  	if(FLG_C){CALL(REG_PC+3);}else{REG_PC+=3;} continue;
-		case 0xDE: /* SBC A,# Z1HC */  		BINOPA_SUB(OPERAND8-FLG_C_01); REG_PC+=2; continue;
+		case 0xDE: /* SBC A,# Z1HC */  		BINOPA_SUB(OPERAND8+FLG_C_01); REG_PC+=2; continue;
 		case 0xDF: /* RST 18H ---- */  		RST(0x18); continue;
 		case 0xE0: /* LD ($FF00+n),A ---- */memory_write8(0xff00+OPERAND8, REG_A); REG_PC+=2; continue;
 		case 0xE1: /* POP HL ---- */  		POP(REG_HL); REG_PC+=1; continue;
@@ -1175,19 +1177,19 @@ int disas_one(uint16_t pc) {
 			switch(BIT5_3(memory_read8(pc))){
 			case 0x7:
 				//JR C,e
-				DISAS_PRINT("JR C,%hhX", memory_read8(pc+1)+2);
+				DISAS_PRINT("JR C,%hhX", memory_read8(pc+1));
 				return 2;
 			case 0x6:
 				//JR NC,e
-				DISAS_PRINT("JR NC,%hhX", memory_read8(pc+1)+2);
+				DISAS_PRINT("JR NC,%hhX", memory_read8(pc+1));
 				return 2;
 			case 0x5:
 				//JR Z,e
-				DISAS_PRINT("JR Z,%hhX", memory_read8(pc+1)+2);
+				DISAS_PRINT("JR Z,%hhX", memory_read8(pc+1));
 				return 2;
 			case 0x4:
 				//JR NZ,e
-				DISAS_PRINT("JR NZ,%hhX", memory_read8(pc+1)+2);
+				DISAS_PRINT("JR NZ,%hhX", memory_read8(pc+1));
 				return 2;
 			}
 			break;

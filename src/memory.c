@@ -55,6 +55,90 @@ void memory_free() {
 }
 
 uint8_t memory_write8(uint16_t dst, uint8_t value) {
+	if(dst < V_CART_ROMN){
+		//CART_ROM0
+		cart_rom0_write8(cart, dst, value);
+	}else if(dst < V_INTERNAL_VRAM){
+		//CART_ROMN
+		cart_romn_write8(cart, dst, value);
+	}else if(dst < V_CART_RAMN){
+		//INTERNAL_VRAM
+		INTERNAL_VRAM[dst-V_INTERNAL_VRAM] = value;
+	}else if(dst < V_INTERNAL_WRAM){
+		//CART_RAMN
+		cart_ramn_write8(cart, dst, value);
+	}else if(dst < V_INTERNAL_WRAM_MIRROR){
+		//INTERNAL_WRAM
+		INTERNAL_WRAM[dst-V_INTERNAL_WRAM] = value;
+	}else if(dst < V_INTERNAL_OAM){
+		//INTERNAL_WRAM_MIRROR
+		INTERNAL_WRAM_MIRROR[dst-V_INTERNAL_WRAM_MIRROR] = value;
+	}else if(dst < V_INTERNAL_RESERVED){
+		//INTERNAL_OAM
+		INTERNAL_OAM[dst-V_INTERNAL_OAM] = value;
+	}else if(dst < V_INTERNAL_IO){
+		//INTERNAL_RESERVED
+		INTERNAL_RESERVED[dst-V_INTERNAL_RESERVED] = value;
+	}else if(dst < V_INTERNAL_STACK){
+		//INTERNAL_IO
+		switch(dst-V_INTERNAL_IO){
+		case IO_P1_R: INTERNAL_IO[IO_P1_R] = value; break;
+		case IO_DIV_R: clock_gettime(CLOCK_MONOTONIC, &div_origin); break;
+		case IO_TIMA_R: INTERNAL_IO[IO_TIMA_R]=value; break;
+		case IO_TMA_R: INTERNAL_IO[IO_TMA_R]=value; break;
+		case IO_TAC_R:
+			{
+				INTERNAL_IO[IO_TAC_R]=value;
+				SDL_RemoveTimer(timer_id);
+				if(value&0x4){
+					//timer start
+					clock_gettime(CLOCK_MONOTONIC, &timer_origin);
+					int hz_exp;
+					switch(value&0x3){
+					case 0: hz_exp=12;
+					case 1: hz_exp=18;
+					case 2: hz_exp=16;
+					case 3: hz_exp=14;
+					}
+					//1ms=10^6sec~~2^20sec
+					timer_id=SDL_AddTimer((0xff-INTERNAL_IO[IO_TMA])<<(20-hz_exp), timer_callback, NULL);
+				}
+			}
+			break;
+		case IO_IF_R: CAS_UPDATE(REG_IF, value); break;
+		case IO_LCDC_R: INTERNAL_IO[IO_LCDC_R]=value; break;
+		case IO_STAT_R: INTERNAL_IO[IO_STAT_R]=value; break;
+		case IO_SCY_R: INTERNAL_IO[IO_SCY_R]=value; break;
+		case IO_SCX_R: INTERNAL_IO[IO_SCX_R]=value; break;
+		case IO_LY_R: break;
+		case IO_LYC_R: INTERNAL_IO[IO_LYC_R]=value; break;
+		case IO_DMA_R:
+			{
+				uint16_t start=(value)<<8, end=(start|0x9f);
+				int oam_dst=0;
+				for(; start<=end; start++)
+					INTERNAL_OAM[oam_dst++] = memory_read8(start);
+			}
+			break;
+		case IO_BGP_R: INTERNAL_IO[IO_BGP_R]=value; break;
+		case IO_OBP0_R: INTERNAL_IO[IO_OBP0_R]=value; break;
+		case IO_OBP1_R: INTERNAL_IO[IO_OBP1_R]=value; break;
+		case IO_WY_R: INTERNAL_IO[IO_WY_R]=value; break;
+		case IO_WX_R: INTERNAL_IO[IO_WX_R]=value; break;
+		}
+	}else if(dst < V_INTERNAL_INTMASK){
+		//INTERNAL_STACK
+		INTERNAL_STACK[dst-V_INTERNAL_STACK] = value;
+	}else{
+		//INTERNAL_INTMASK
+		REG_IE.value = value;
+	}
+
+	/*
+	if(dst>=0xe000 && dst<=0xfdff){
+		INTERNAL_WRAM_MIRROR[dst-V_INTERNAL_WRAM_MIRROR] = value;
+		return value;
+	}
 	if(dst & 0x8000){
 		if(dst & 0x4000){
 			if(dst & 0x2000){
@@ -152,7 +236,7 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 			cart_rom0_write8(cart, dst, value);
 		}
 	}
-
+	*/
 	return value;
 }
 
@@ -163,6 +247,111 @@ uint16_t memory_write16(uint16_t dst, uint16_t value) {
 }
 
 uint8_t memory_read8(uint16_t src) {
+	if(src < V_CART_ROMN){
+		//CART_ROM0
+		return cart_rom0_read8(cart, src);
+	}else if(src < V_INTERNAL_VRAM){
+		//CART_ROMN
+		return cart_romn_read8(cart, src);
+	}else if(src < V_CART_RAMN){
+		//INTERNAL_VRAM
+		return INTERNAL_VRAM[src-V_INTERNAL_VRAM];
+	}else if(src < V_INTERNAL_WRAM){
+		//CART_RAMN
+		return cart_ramn_read8(cart, src);
+	}else if(src < V_INTERNAL_WRAM_MIRROR){
+		//INTERNAL_WRAM
+		return INTERNAL_WRAM[src-V_INTERNAL_WRAM];
+	}else if(src < V_INTERNAL_OAM){
+		//INTERNAL_WRAM_MIRROR
+		return INTERNAL_WRAM_MIRROR[src-V_INTERNAL_WRAM_MIRROR];
+	}else if(src < V_INTERNAL_RESERVED){
+		//INTERNAL_OAM
+		return INTERNAL_OAM[src-V_INTERNAL_OAM];
+	}else if(src < V_INTERNAL_IO){
+		//INTERNAL_RESERVED
+		return INTERNAL_RESERVED[src-V_INTERNAL_RESERVED];
+	}else if(src < V_INTERNAL_STACK){
+		//INTERNAL_IO
+		switch(src-V_INTERNAL_IO){
+		case IO_P1_R:
+			{
+				uint8_t p1=INTERNAL_IO[IO_P1_R];
+				const Uint8 *state=SDL_GetKeyboardState(NULL);
+				int p10=1, p11=1, p12=1, p13=1, p14 = p1&0x10, p15 = p1&0x20;
+				if(!p14){
+					if(state[SDL_GetScancodeFromKey(SDLK_RIGHT)]) p10=0;
+					if(state[SDL_GetScancodeFromKey(SDLK_LEFT)]) p11=0;
+					if(state[SDL_GetScancodeFromKey(SDLK_UP)]) p12=0;
+					if(state[SDL_GetScancodeFromKey(SDLK_DOWN)]) p13=0;
+				}
+				if(!p15){
+					if(state[SDL_GetScancodeFromKey(SDLK_z)]) p10=0;
+					if(state[SDL_GetScancodeFromKey(SDLK_x)]) p11=0;
+					if(state[SDL_GetScancodeFromKey(SDLK_LEFTBRACKET)]) p12=0;
+					if(state[SDL_GetScancodeFromKey(SDLK_RIGHTBRACKET)]) p13=0;
+				}
+				return 0x3<<6 | p15<<5 | p14<<4 | p13<<3 | p12<<2 | p11<<1 | p10;
+			}
+		case IO_DIV_R:
+			{
+				//8192Hz
+				struct timespec now;
+				clock_gettime(CLOCK_MONOTONIC, &now);
+				int64_t diff_sec=now.tv_sec-div_origin.tv_sec;
+				int64_t diff_usec=(now.tv_nsec-div_origin.tv_nsec)/1000;
+				if(diff_usec<0){
+					diff_sec--; diff_usec+=1000000;
+				}
+				return (((diff_sec<<13)&0xff)+((diff_usec>>7)&0xff))&0xff;
+			}
+		case IO_TIMA_R:
+			{
+				struct timespec now;
+				clock_gettime(CLOCK_MONOTONIC, &now);
+				int64_t diff_sec=now.tv_sec-timer_origin.tv_sec;
+				int64_t diff_usec=(now.tv_nsec-timer_origin.tv_nsec)/1000;
+				int hz_exp;
+				switch(INTERNAL_IO[IO_TAC_R]&0x3){
+				case 0: hz_exp=12;
+				case 1: hz_exp=18;
+				case 2: hz_exp=16;
+				case 3: hz_exp=14;
+				}
+				if(diff_usec<0){
+					diff_sec--; diff_usec+=1000000;
+				}
+				return (INTERNAL_IO[IO_TMA_R]+((diff_sec<<hz_exp)&0xff)+((diff_usec>>(20-hz_exp))&0xff))&0xff;
+			}
+		case IO_TMA_R: return INTERNAL_IO[IO_TMA_R];
+		case IO_TAC_R: return INTERNAL_IO[IO_TAC_R];
+		case IO_IF_R: return REG_IF.value;
+		case IO_LCDC_R: return INTERNAL_IO[IO_LCDC_R];
+		case IO_STAT_R:
+			//下位3bitは別で管理
+			return (INTERNAL_IO[IO_STAT_R]&0xf8) | ((INTERNAL_IO[IO_LY_R]==INTERNAL_IO[IO_LYC_R])<<2) | LCDMODE;
+		case IO_SCY_R: return INTERNAL_IO[IO_SCY_R];
+		case IO_SCX_R: return INTERNAL_IO[IO_SCX_R];
+		case IO_LY_R: return INTERNAL_IO[IO_LY_R];
+		case IO_LYC_R: return INTERNAL_IO[IO_LYC_R];
+		case IO_DMA_R: return 0;
+		case IO_BGP_R: return INTERNAL_IO[IO_BGP_R];
+		case IO_OBP0_R: return INTERNAL_IO[IO_OBP0_R];
+		case IO_OBP1_R: return INTERNAL_IO[IO_OBP1_R];
+		case IO_WY_R: return INTERNAL_IO[IO_WY_R];
+		case IO_WX_R: return INTERNAL_IO[IO_WX_R];
+		}
+	}else if(src < V_INTERNAL_INTMASK){
+		//INTERNAL_STACK
+		return INTERNAL_STACK[src-V_INTERNAL_STACK];
+	}else{
+		//INTERNAL_INTMASK
+		return REG_IE.value;
+	}
+
+	/*
+	if(src>=0xe000 && src<=0xfdff)
+		return INTERNAL_WRAM_MIRROR[src-V_INTERNAL_WRAM_MIRROR];
 	if(src & 0x8000){
 		if(src & 0x4000){
 			if(src & 0x2000){
@@ -282,6 +471,7 @@ uint8_t memory_read8(uint16_t src) {
 			return cart_rom0_read8(cart, src);
 		}
 	}
+	*/
 
 	return 0;
 }

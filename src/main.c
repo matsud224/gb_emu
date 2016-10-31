@@ -15,6 +15,7 @@
 #include "SDL2/SDL_thread.h"
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_ttf.h"
+#include "SDL2/SDL_keyboard.h"
 
 #define handle_error(msg) \
     do { perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -107,7 +108,7 @@ struct RGB ACTUALCOLOR[4] = {{222,249,208},
 							 {36,54,31}};
 Uint32 ABSCOLOR[4];
 
-#define PALETTE(p,n) ((INTERNAL_IO[p]>>(n))&0x3)
+#define PALETTE(p,n) ((INTERNAL_IO[p]>>((n)<<1))&0x3)
 #define BGPALETTE(n) ((INTERNAL_IO[IO_BGP_R]>>((n)<<1))&0x3)
 
 static void draw_background(uint8_t lcdc, Uint32 buf[]) {
@@ -116,16 +117,17 @@ static void draw_background(uint8_t lcdc, Uint32 buf[]) {
 	uint8_t scx=INTERNAL_IO[IO_SCX_R], scy=INTERNAL_IO[IO_SCY_R];
 
 	for(int y=0; y<144; y++){
+		int map_y=(y+scy)%256, tile_y=map_y>>3;
+		int in_y=map_y%8;
 		for(int x=0; x<160; x++){
-			int map_y=(y+scy)%256, map_x=(x+scx)%256;
-            int tile_y=map_y>>3, tile_x=map_x>>3;
+			int map_x=(x+scx)%256, tile_x=map_x>>3;
             uint8_t *thisdata; //タイルパターンデータの開始アドレス
             if(lcdc&0x10)
 				thisdata = tiledata + ((uint8_t)tilemap[tile_y*32+tile_x]*16);
 			else
 				thisdata = tiledata + ((int8_t)tilemap[tile_y*32+tile_x]*16);
 
-			int in_x=map_x%8, in_y=map_y%8;
+			int in_x=map_x%8;
 			uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
 			buf[y*160 + x] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
 		}
@@ -138,9 +140,11 @@ static void draw_window(uint8_t lcdc, Uint32 buf[]) {
 	int wx=INTERNAL_IO[IO_WX_R]-7, wy=INTERNAL_IO[IO_WY_R];
 
 	for(int y=0; y<144; y++){
+		int map_y=y-wy, in_y=map_y%8;
+		if(y<wy) continue;
 		for(int x=0; x<160; x++){
-			if(x<wx || y<wy) continue;
-			int map_y=y-wy, map_x=x-wx;
+			if(x<wx) continue;
+			int map_x=x-wx;
             int tile_y=map_y>>3, tile_x=map_x>>3;
             uint8_t *thisdata; //タイルパターンデータの開始アドレス
             if(lcdc&0x10)
@@ -148,7 +152,7 @@ static void draw_window(uint8_t lcdc, Uint32 buf[]) {
 			else
 				thisdata = tiledata + ((int8_t)tilemap[tile_y*32+tile_x]*16);
 
-			int in_x=map_x%8, in_y=map_y%8;
+			int in_x=map_x%8;
 			uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
 			buf[y*160 + x] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
 		}
@@ -158,10 +162,11 @@ static void draw_window(uint8_t lcdc, Uint32 buf[]) {
 static void draw_sprite(uint8_t lcdc, Uint32 buf[]) {
 	uint8_t *tiledata = INTERNAL_VRAM+(0x8000-V_INTERNAL_VRAM);
 	uint8_t *oam_termial = INTERNAL_OAM+(4*40);
+
 	for(uint8_t *attr=INTERNAL_OAM; attr<oam_termial; attr+=4){
         int sp_y=attr[0]-16, sp_x=attr[1]-8;
         uint8_t flags=attr[3];
-//printf("sprite: %d,%d(#%X)\n", sp_x, sp_y, attr[2]);
+        uint16_t palette_addr = (flags&0x10)?IO_OBP1_R:IO_OBP0_R;
 		if(sp_y==-16 || sp_y>=144 || sp_x==-8 || sp_x>=160)
 			continue;
 
@@ -170,24 +175,30 @@ static void draw_sprite(uint8_t lcdc, Uint32 buf[]) {
 			uint8_t *upperdata = tiledata + (attr[2]&0xfe)*16;
 			uint8_t *lowerdata = tiledata + (attr[2]|0x01)*16;
 			for(int y=0; y<16; y++){
+				int scr_y=(flags&0x40)?(sp_y+(15-y)):(sp_y+y);
+				if(scr_y<0 || scr_y>=144) continue;
+				uint8_t lower=(y&0x8)?lowerdata[(y-8)*2]:upperdata[y*2],
+						upper=(y&0x8)?lowerdata[(y-8)*2+1]:upperdata[y*2+1];
 				for(int x=0; x<8; x++){
-					int scr_y=sp_y+y, scr_x=sp_x+x;
-					if(scr_y<0 || scr_y>=144 || scr_x<0 || scr_x>=160)
-						continue;
-					uint8_t lower=(y&0x8?lowerdata:upperdata)[y*2], upper=(y&0x8?lowerdata:upperdata)[y*2+1];
-					buf[scr_y*160 + scr_x] = ABSCOLOR[BGPALETTE(((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1))];
+					int scr_x=(flags&0x20)?(sp_x+(7-x)):(sp_x+x);
+					if(scr_x<0 || scr_x>=160) continue;
+					//TODO: パレット選択
+					Uint32 cnum = PALETTE(palette_addr, ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1));
+					if(cnum!=0) buf[scr_y*160 + scr_x] = ABSCOLOR[cnum]; //0なら透過
 				}
 			}
 		}else{
 			//8x8 mode
 			uint8_t *thisdata = tiledata + attr[2]*16;
 			for(int y=0; y<8; y++){
+				int scr_y=(flags&0x40)?(sp_y+(7-y)):(sp_y+y);
+				if(scr_y<0 || scr_y>=144) continue;
+				uint8_t lower=thisdata[y*2], upper=thisdata[y*2+1];
 				for(int x=0; x<8; x++){
-					int scr_y=sp_y+y, scr_x=sp_x+x;
-					if(scr_y<0 || scr_y>=144 || scr_x<0 || scr_x>=160)
-						continue;
-					uint8_t lower=thisdata[y*2], upper=thisdata[y*2+1];
-					buf[scr_y*160 + scr_x] = ABSCOLOR[BGPALETTE(((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1))];
+					int scr_x=(flags&0x20)?(sp_x+(7-x)):(sp_x+x);
+					if(scr_x<0 || scr_x>=160) continue;
+					Uint32 cnum = PALETTE(palette_addr, ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1));
+					if(cnum!=0) buf[scr_y*160 + scr_x] = ABSCOLOR[cnum]; //0なら透過
 				}
 			}
 		}
@@ -220,7 +231,18 @@ int main(int argc, char *argv[]) {
 		printf("memory_init failed\n");
 		return -1;
 	}
-
+/*
+	puts("---MEMORY TEST---");
+	uint32_t i=0x8000;
+	uint8_t v=7;
+	do{
+		memory_write8(i, v);
+		if(memory_read8(i)!=v)
+			printf("ERROR: \t0x%X\n", i);
+		i++; v++;
+	}while(i!=0x10000);
+	puts("-----------------");
+*/
 	startup();
 
 	SDL_Thread *cpu_thread = SDL_CreateThread(cpu_exec, "cpu_thread", (void*)NULL);
@@ -256,18 +278,18 @@ int main(int argc, char *argv[]) {
 				quit=1;
 				break;
 			case SDL_KEYDOWN:
-				switch(e.key.keysym.scancode){
-				case SDL_SCANCODE_RIGHT:
-				case SDL_SCANCODE_LEFT:
-				case SDL_SCANCODE_UP:
-				case SDL_SCANCODE_DOWN:
+				switch(e.key.keysym.sym){
+				case SDLK_RIGHT:
+				case SDLK_LEFT:
+				case SDLK_UP:
+				case SDLK_DOWN:
 					if((INTERNAL_IO[IO_P1_R]&0x10)==0)
 						request_interrupt(INT_JOYPAD);
 					break;
-				case SDL_SCANCODE_A:
-				case SDL_SCANCODE_B:
-				case SDL_SCANCODE_LEFTBRACKET:
-				case SDL_SCANCODE_RIGHTBRACKET:
+				case SDLK_z:
+				case SDLK_x:
+				case SDLK_LEFTBRACKET:
+				case SDLK_RIGHTBRACKET:
 					if((INTERNAL_IO[IO_P1_R]&0x20)==0)
 						request_interrupt(INT_JOYPAD);
 					break;

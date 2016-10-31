@@ -28,7 +28,7 @@ struct cartridge *cart_init(uint8_t *rom) {
 	cart->rom = rom;
 	cart->ram_enabled = 1;
 	cart->banknum = 0;
-	cart->mbc1_mode =0;
+	cart->mbc1_mode = 0;
 	memcpy(&(cart->header), rom+0x100, sizeof(struct gb_carthdr));
 
 	if(cart->header.cgbflag == CGBFLAG_CGBONLY) {
