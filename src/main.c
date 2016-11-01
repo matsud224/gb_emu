@@ -16,6 +16,7 @@
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_ttf.h"
 #include "SDL2/SDL_keyboard.h"
+#include "SDL2/SDL_gamecontroller.h"
 
 #define handle_error(msg) \
     do { perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -54,7 +55,7 @@ static uint8_t *open_rom(char* filename) {
 }
 
 static int sdl_init() {
-	if( SDL_Init( SDL_INIT_VIDEO ) < 0 ){
+	if( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER ) < 0 ){
 		printf( "SDL Init failed : %s\n", SDL_GetError() );
 		return -1;
 	}else{
@@ -70,6 +71,19 @@ static int sdl_init() {
 			printf( "SDL_CreateRenderer failed : %s\n", SDL_GetError() );
 			return -1;
 		}
+	}
+
+	joystick = NULL;
+	if(SDL_NumJoysticks() > 0){
+		joystick = SDL_JoystickOpen(0);
+	}
+
+	if(joystick == NULL){
+		printf("Keyboard mode\n");
+		INPUTTYPE = INPUT_KEYBOARD;
+	}else{
+		printf("Gamepad mode\n");
+		INPUTTYPE = INPUT_JOYSTICK;
 	}
 
 	return 0;
@@ -184,7 +198,8 @@ static void draw_sprite(uint8_t lcdc, Uint32 buf[]) {
 					if(scr_x<0 || scr_x>=160) continue;
 					//TODO: パレット選択
 					Uint32 cnum = PALETTE(palette_addr, ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1));
-					if(cnum!=0) buf[scr_y*160 + scr_x] = ABSCOLOR[cnum]; //0なら透過
+					if(cnum!=0 && (!(flags&0x80) || buf[scr_y*160 + scr_x]==ABSCOLOR[0]))
+						buf[scr_y*160 + scr_x] = ABSCOLOR[cnum]; //0なら透過
 				}
 			}
 		}else{
@@ -198,7 +213,8 @@ static void draw_sprite(uint8_t lcdc, Uint32 buf[]) {
 					int scr_x=(flags&0x20)?(sp_x+(7-x)):(sp_x+x);
 					if(scr_x<0 || scr_x>=160) continue;
 					Uint32 cnum = PALETTE(palette_addr, ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1));
-					if(cnum!=0) buf[scr_y*160 + scr_x] = ABSCOLOR[cnum]; //0なら透過
+					if(cnum!=0 && (!(flags&0x80) || buf[scr_y*160 + scr_x]==ABSCOLOR[0]))
+						buf[scr_y*160 + scr_x] = ABSCOLOR[cnum]; //0なら透過
 				}
 			}
 		}
@@ -278,6 +294,7 @@ int main(int argc, char *argv[]) {
 				quit=1;
 				break;
 			case SDL_KEYDOWN:
+				if(INPUTTYPE!=INPUT_KEYBOARD) break;
 				switch(e.key.keysym.sym){
 				case SDLK_RIGHT:
 				case SDLK_LEFT:
@@ -295,6 +312,20 @@ int main(int argc, char *argv[]) {
 					break;
 				default:
 					break;
+				}
+				break;
+			case SDL_JOYAXISMOTION:
+				if(INPUTTYPE!=INPUT_JOYSTICK) break;
+				if(abs(e.jaxis.value) > JOYSTICK_DEAD_ZONE)
+					request_interrupt(INT_JOYPAD);
+				break;
+			case SDL_JOYBUTTONDOWN:
+				switch(e.jbutton.button){
+				case JOYSTICK_BUTTON_A:
+				case JOYSTICK_BUTTON_B:
+				case JOYSTICK_BUTTON_SELECT:
+				case JOYSTICK_BUTTON_START:
+					request_interrupt(INT_JOYPAD);
 				}
 				break;
 			}
@@ -360,6 +391,9 @@ int main(int argc, char *argv[]) {
 
 	cpu_post_all_semaphore();
 	SDL_WaitThread(cpu_thread, NULL);
+
+	if(joystick!=NULL)
+		SDL_JoystickClose(joystick);
 
 	SDL_DestroyRenderer(window_renderer);
 	window_renderer = NULL;

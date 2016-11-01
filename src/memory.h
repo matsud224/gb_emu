@@ -2,6 +2,7 @@
 
 #include <inttypes.h>
 #include "SDL2/SDL_atomic.h"
+#include "SDL2/SDL_gamecontroller.h"
 
 
 extern uint8_t LCDMODE;
@@ -15,6 +16,20 @@ extern SDL_atomic_t REG_IF, REG_IE;
 extern uint8_t*		INTERNAL_VRAM;
 extern uint8_t*		INTERNAL_OAM;
 extern uint8_t*		INTERNAL_IO;
+
+extern int INPUTTYPE;
+#define INPUT_KEYBOARD 0
+#define INPUT_JOYSTICK 1
+extern SDL_Joystick *joystick;
+
+//使用するジョイスティックに応じて以下を変更
+//ジョイスティックの感度
+#define JOYSTICK_DEAD_ZONE 8000
+//ボタン番号の対応
+#define JOYSTICK_BUTTON_A 0
+#define JOYSTICK_BUTTON_B 1
+#define JOYSTICK_BUTTON_SELECT 6
+#define JOYSTICK_BUTTON_START 7
 
 #define LCDMODE_HBLANK 0
 #define LCDMODE_VBLANK 1

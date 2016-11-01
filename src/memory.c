@@ -6,6 +6,7 @@
 #include "SDL2/SDL_timer.h"
 #include "SDL2/SDL_keyboard.h"
 #include "SDL2/SDL_scancode.h"
+#include "SDL2/SDL_gamecontroller.h"
 
 uint8_t*			INTERNAL_VRAM = NULL;
 static uint8_t*		INTERNAL_WRAM = NULL;
@@ -14,6 +15,10 @@ uint8_t*			INTERNAL_OAM = NULL;
 static uint8_t*		INTERNAL_RESERVED = NULL;
 uint8_t*			INTERNAL_IO = NULL;
 static uint8_t*		INTERNAL_STACK = NULL;
+
+
+int INPUTTYPE; //keyboard or gamepad
+SDL_Joystick *joystick = NULL;
 
 SDL_atomic_t REG_IF, REG_IE;
 uint8_t LCDMODE;
@@ -279,18 +284,34 @@ uint8_t memory_read8(uint16_t src) {
 				uint8_t p1=INTERNAL_IO[IO_P1_R];
 				const Uint8 *state=SDL_GetKeyboardState(NULL);
 				int p10=1, p11=1, p12=1, p13=1, p14 = p1&0x10, p15 = p1&0x20;
-				if(!p14){
-					if(state[SDL_GetScancodeFromKey(SDLK_RIGHT)]) p10=0;
-					if(state[SDL_GetScancodeFromKey(SDLK_LEFT)]) p11=0;
-					if(state[SDL_GetScancodeFromKey(SDLK_UP)]) p12=0;
-					if(state[SDL_GetScancodeFromKey(SDLK_DOWN)]) p13=0;
+				if(INPUTTYPE == INPUT_KEYBOARD){
+					if(!p14){
+						if(state[SDL_GetScancodeFromKey(SDLK_RIGHT)]) p10=0;
+						if(state[SDL_GetScancodeFromKey(SDLK_LEFT)]) p11=0;
+						if(state[SDL_GetScancodeFromKey(SDLK_UP)]) p12=0;
+						if(state[SDL_GetScancodeFromKey(SDLK_DOWN)]) p13=0;
+					}
+					if(!p15){
+						if(state[SDL_GetScancodeFromKey(SDLK_z)]) p10=0;
+						if(state[SDL_GetScancodeFromKey(SDLK_x)]) p11=0;
+						if(state[SDL_GetScancodeFromKey(SDLK_LEFTBRACKET)]) p12=0;
+						if(state[SDL_GetScancodeFromKey(SDLK_RIGHTBRACKET)]) p13=0;
+					}
+				}else if(INPUTTYPE == INPUT_JOYSTICK){
+					if(!p14){
+						if(SDL_JoystickGetAxis(joystick, 0) > JOYSTICK_DEAD_ZONE) p10=0;
+						if(SDL_JoystickGetAxis(joystick, 0) < -JOYSTICK_DEAD_ZONE) p11=0;
+						if(SDL_JoystickGetAxis(joystick, 1) < -JOYSTICK_DEAD_ZONE) p12=0;
+						if(SDL_JoystickGetAxis(joystick, 1) > JOYSTICK_DEAD_ZONE) p13=0;
+					}
+					if(!p15){
+						if(SDL_JoystickGetButton(joystick, JOYSTICK_BUTTON_A)) p10=0;
+						if(SDL_JoystickGetButton(joystick, JOYSTICK_BUTTON_B)) p11=0;
+						if(SDL_JoystickGetButton(joystick, JOYSTICK_BUTTON_SELECT)) p12=0;
+						if(SDL_JoystickGetButton(joystick, JOYSTICK_BUTTON_START)) p13=0;
+					}
 				}
-				if(!p15){
-					if(state[SDL_GetScancodeFromKey(SDLK_z)]) p10=0;
-					if(state[SDL_GetScancodeFromKey(SDLK_x)]) p11=0;
-					if(state[SDL_GetScancodeFromKey(SDLK_LEFTBRACKET)]) p12=0;
-					if(state[SDL_GetScancodeFromKey(SDLK_RIGHTBRACKET)]) p13=0;
-				}
+
 				return 0x3<<6 | p15<<5 | p14<<4 | p13<<3 | p12<<2 | p11<<1 | p10;
 			}
 		case IO_DIV_R:
@@ -303,7 +324,7 @@ uint8_t memory_read8(uint16_t src) {
 				if(diff_usec<0){
 					diff_sec--; diff_usec+=1000000;
 				}
-				return (((diff_sec<<13)&0xff)+((diff_usec>>7)&0xff))&0xff;
+				return ((diff_sec<<6)+diff_usec)%122;
 			}
 		case IO_TIMA_R:
 			{
