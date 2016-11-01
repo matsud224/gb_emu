@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <inttypes.h>
+#include <assert.h>
 
 #include "cpu.h"
 #include "memory.h"
@@ -231,6 +232,7 @@ void request_interrupt(uint8_t type) {
 		SDL_SemPost(intwait_sem);
 	}
 }
+
 
 int cpu_exec(void *ptr) {
 	uint32_t cr, tmp, tmp2;

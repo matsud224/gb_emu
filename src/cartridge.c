@@ -81,7 +81,7 @@ static void update_mapping(struct cartridge *cart) {
 		}else{
 			//RAM Banking Mode
 			uint8_t romnum = cart->banknum&0x1f;
-			if(romnum==0x0 || romnum==0x20 || romnum==0x40 || romnum==0x60)
+			if(romnum==0x0)
 				romnum++;
 			//printf("bank changed(4/32): %d\n", cart->banknum);
 			cart->romn = cart->rom + (0x4000*romnum);
@@ -95,9 +95,11 @@ void cart_rom0_write8(struct cartridge *cart, uint16_t dst, uint8_t value) {
 		//RAM書き込み保護の切り替え
 		cart->ram_enabled = (value==0xa);
 	}else{
-		//Bank Numberの下位5ビット
-		cart->banknum = (cart->banknum&0x60) | (value&0x1f);
-		update_mapping(cart);
+		if(cart->header.carttype == CARTTYPE_MBC1){
+			//Bank Numberの下位5ビット
+			cart->banknum = (cart->banknum&0x60) | (value&0x1f);
+			update_mapping(cart);
+		}
 	}
 }
 

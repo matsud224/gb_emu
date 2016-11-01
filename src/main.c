@@ -129,7 +129,16 @@ static void draw_background(uint8_t lcdc, Uint32 buf[]) {
 	uint8_t *tilemap = INTERNAL_VRAM+(((lcdc&0x8)?0x9c00:0x9800)-V_INTERNAL_VRAM);
 	uint8_t *tiledata = INTERNAL_VRAM+(((lcdc&0x10)?0x8000:0x9000)-V_INTERNAL_VRAM);
 	uint8_t scx=INTERNAL_IO[IO_SCX_R], scy=INTERNAL_IO[IO_SCY_R];
-
+/*
+	puts("---------------------");
+	for(int y=0; y<32; y++){
+		for(int x=0; x<32; x++){
+			printf("%03d ", tilemap[y*32+x]);
+		}
+		printf("\n");
+	}
+	puts("---------------------");
+*/
 	for(int y=0; y<144; y++){
 		int map_y=(y+scy)%256, tile_y=map_y>>3;
 		int in_y=map_y%8;
@@ -147,6 +156,7 @@ static void draw_background(uint8_t lcdc, Uint32 buf[]) {
 		}
 	}
 }
+
 
 static void draw_window(uint8_t lcdc, Uint32 buf[]) {
 	uint8_t *tilemap = INTERNAL_VRAM+(((lcdc&0x40)?0x9c00:0x9800)-V_INTERNAL_VRAM);
@@ -196,9 +206,8 @@ static void draw_sprite(uint8_t lcdc, Uint32 buf[]) {
 				for(int x=0; x<8; x++){
 					int scr_x=(flags&0x20)?(sp_x+(7-x)):(sp_x+x);
 					if(scr_x<0 || scr_x>=160) continue;
-					//TODO: パレット選択
 					Uint32 cnum = PALETTE(palette_addr, ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1));
-					if(cnum!=0 && (!(flags&0x80) || buf[scr_y*160 + scr_x]==ABSCOLOR[0]))
+					if(cnum!=0 && (!(flags&0x80) || buf[scr_y*160 + scr_x]==ABSCOLOR[BGPALETTE(0)]))
 						buf[scr_y*160 + scr_x] = ABSCOLOR[cnum]; //0なら透過
 				}
 			}
@@ -213,7 +222,7 @@ static void draw_sprite(uint8_t lcdc, Uint32 buf[]) {
 					int scr_x=(flags&0x20)?(sp_x+(7-x)):(sp_x+x);
 					if(scr_x<0 || scr_x>=160) continue;
 					Uint32 cnum = PALETTE(palette_addr, ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1));
-					if(cnum!=0 && (!(flags&0x80) || buf[scr_y*160 + scr_x]==ABSCOLOR[0]))
+					if(cnum!=0 && (!(flags&0x80) || buf[scr_y*160 + scr_x]==ABSCOLOR[BGPALETTE(0)]))
 						buf[scr_y*160 + scr_x] = ABSCOLOR[cnum]; //0なら透過
 				}
 			}
@@ -247,7 +256,7 @@ int main(int argc, char *argv[]) {
 		printf("memory_init failed\n");
 		return -1;
 	}
-/*
+
 	puts("---MEMORY TEST---");
 	uint32_t i=0x8000;
 	uint8_t v=7;
@@ -257,8 +266,14 @@ int main(int argc, char *argv[]) {
 			printf("ERROR: \t0x%X\n", i);
 		i++; v++;
 	}while(i!=0x10000);
+
+	static uint8_t copied[0x8000];
+	for(uint16_t i=0; i<0x8000; i++)
+		copied[i] = memory_read8(i);
+	if(memcmp(rom, copied, 0x8000) != 0)
+		puts("ROM error!!!");
 	puts("-----------------");
-*/
+
 	startup();
 
 	SDL_Thread *cpu_thread = SDL_CreateThread(cpu_exec, "cpu_thread", (void*)NULL);
@@ -294,7 +309,6 @@ int main(int argc, char *argv[]) {
 				quit=1;
 				break;
 			case SDL_KEYDOWN:
-				if(INPUTTYPE!=INPUT_KEYBOARD) break;
 				switch(e.key.keysym.sym){
 				case SDLK_RIGHT:
 				case SDLK_LEFT:
@@ -309,6 +323,9 @@ int main(int argc, char *argv[]) {
 				case SDLK_RIGHTBRACKET:
 					if((INTERNAL_IO[IO_P1_R]&0x20)==0)
 						request_interrupt(INT_JOYPAD);
+					break;
+				case SDLK_s:
+					SDL_SaveBMP(bitmap_surface, "screenshot.bmp");
 					break;
 				default:
 					break;

@@ -68,6 +68,8 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 		cart_romn_write8(cart, dst, value);
 	}else if(dst < V_CART_RAMN){
 		//INTERNAL_VRAM
+		//if(dst>=0x8800 && dst<=0x9800)
+			//printf("VRAM[0x%X]=0x%X\n", dst, value);
 		INTERNAL_VRAM[dst-V_INTERNAL_VRAM] = value;
 	}else if(dst < V_INTERNAL_WRAM){
 		//CART_RAMN
@@ -100,10 +102,10 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 					clock_gettime(CLOCK_MONOTONIC, &timer_origin);
 					int hz_exp;
 					switch(value&0x3){
-					case 0: hz_exp=12;
-					case 1: hz_exp=18;
-					case 2: hz_exp=16;
-					case 3: hz_exp=14;
+					case 0: hz_exp=12; break;
+					case 1: hz_exp=18; break;
+					case 2: hz_exp=16; break;
+					case 3: hz_exp=14; break;
 					}
 					//1ms=10^6sec~~2^20sec
 					timer_id=SDL_AddTimer((0xff-INTERNAL_IO[IO_TMA])<<(20-hz_exp), timer_callback, NULL);
@@ -173,10 +175,10 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 										clock_gettime(CLOCK_MONOTONIC, &timer_origin);
 										int hz_exp;
 										switch(value&0x3){
-										case 0: hz_exp=12;
-										case 1: hz_exp=18;
-										case 2: hz_exp=16;
-										case 3: hz_exp=14;
+										case 0: hz_exp=12; break;
+										case 1: hz_exp=18; break;
+										case 2: hz_exp=16; break;
+										case 3: hz_exp=14; break;
 										}
 										//1ms=10^6sec~~2^20sec
 										timer_id=SDL_AddTimer((0xff-INTERNAL_IO[IO_TMA])<<(20-hz_exp), timer_callback, NULL);
@@ -324,7 +326,7 @@ uint8_t memory_read8(uint16_t src) {
 				if(diff_usec<0){
 					diff_sec--; diff_usec+=1000000;
 				}
-				return ((diff_sec<<6)+diff_usec)%122;
+				return ((diff_sec*1000000)+diff_usec)/122;
 			}
 		case IO_TIMA_R:
 			{
@@ -334,10 +336,10 @@ uint8_t memory_read8(uint16_t src) {
 				int64_t diff_usec=(now.tv_nsec-timer_origin.tv_nsec)/1000;
 				int hz_exp;
 				switch(INTERNAL_IO[IO_TAC_R]&0x3){
-				case 0: hz_exp=12;
-				case 1: hz_exp=18;
-				case 2: hz_exp=16;
-				case 3: hz_exp=14;
+				case 0: hz_exp=12; break;
+				case 1: hz_exp=18; break;
+				case 2: hz_exp=16; break;
+				case 3: hz_exp=14; break;
 				}
 				if(diff_usec<0){
 					diff_sec--; diff_usec+=1000000;
@@ -428,10 +430,10 @@ uint8_t memory_read8(uint16_t src) {
 									int64_t diff_usec=(now.tv_nsec-timer_origin.tv_nsec)/1000;
 									int hz_exp;
 									switch(INTERNAL_IO[IO_TAC_R]&0x3){
-									case 0: hz_exp=12;
-									case 1: hz_exp=18;
-									case 2: hz_exp=16;
-									case 3: hz_exp=14;
+									case 0: hz_exp=12; break;
+									case 1: hz_exp=18; break;
+									case 2: hz_exp=16; break;
+									case 3: hz_exp=14; break;
 									}
 									if(diff_usec<0){
 										diff_sec--; diff_usec+=1000000;
