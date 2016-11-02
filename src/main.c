@@ -207,9 +207,9 @@ static void draw_sprite(uint8_t lcdc, Uint32 buf[]) {
 				for(int x=0; x<8; x++){
 					int scr_x=(flags&0x20)?(sp_x+(7-x)):(sp_x+x);
 					if(scr_x<0 || scr_x>=160) continue;
-					Uint32 cnum = PALETTE(palette_addr, ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1));
+					Uint32 cnum = ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1);
 					if(cnum!=0 && (!(flags&0x80) || buf[scr_y*160 + scr_x]==ABSCOLOR[BGPALETTE(0)]))
-						buf[scr_y*160 + scr_x] = ABSCOLOR[cnum]; //0なら透過
+						buf[scr_y*160 + scr_x] = ABSCOLOR[PALETTE(palette_addr, cnum)]; //0なら透過
 				}
 			}
 		}else{
@@ -222,9 +222,9 @@ static void draw_sprite(uint8_t lcdc, Uint32 buf[]) {
 				for(int x=0; x<8; x++){
 					int scr_x=(flags&0x20)?(sp_x+(7-x)):(sp_x+x);
 					if(scr_x<0 || scr_x>=160) continue;
-					Uint32 cnum = PALETTE(palette_addr, ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1));
+					Uint32 cnum = ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1);
 					if(cnum!=0 && (!(flags&0x80) || buf[scr_y*160 + scr_x]==ABSCOLOR[BGPALETTE(0)]))
-						buf[scr_y*160 + scr_x] = ABSCOLOR[cnum]; //0なら透過
+						buf[scr_y*160 + scr_x] = ABSCOLOR[PALETTE(palette_addr, cnum)]; //0なら透過
 				}
 			}
 		}
