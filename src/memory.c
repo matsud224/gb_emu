@@ -68,8 +68,8 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 		cart_romn_write8(cart, dst, value);
 	}else if(dst < V_CART_RAMN){
 		//INTERNAL_VRAM
-		//if(dst>=0x8800 && dst<=0x9800)
-			//printf("VRAM[0x%X]=0x%X\n", dst, value);
+		/*if(dst==0x9820)
+			printf("VRAM[0x%X]=0x%X\n", dst, value);*/
 		INTERNAL_VRAM[dst-V_INTERNAL_VRAM] = value;
 	}else if(dst < V_INTERNAL_WRAM){
 		//CART_RAMN

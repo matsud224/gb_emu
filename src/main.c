@@ -131,9 +131,10 @@ static void draw_background(uint8_t lcdc, Uint32 buf[]) {
 	uint8_t scx=INTERNAL_IO[IO_SCX_R], scy=INTERNAL_IO[IO_SCY_R];
 /*
 	puts("---------------------");
+	printf("LCDC=0x%X\n", lcdc);
 	for(int y=0; y<32; y++){
 		for(int x=0; x<32; x++){
-			printf("%03d ", tilemap[y*32+x]);
+			printf("%02X ", tilemap[y*32+x]);
 		}
 		printf("\n");
 	}
@@ -256,7 +257,7 @@ int main(int argc, char *argv[]) {
 		printf("memory_init failed\n");
 		return -1;
 	}
-
+/*
 	puts("---MEMORY TEST---");
 	uint32_t i=0x8000;
 	uint8_t v=7;
@@ -273,7 +274,7 @@ int main(int argc, char *argv[]) {
 	if(memcmp(rom, copied, 0x8000) != 0)
 		puts("ROM error!!!");
 	puts("-----------------");
-
+*/
 	startup();
 
 	SDL_Thread *cpu_thread = SDL_CreateThread(cpu_exec, "cpu_thread", (void*)NULL);

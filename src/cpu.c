@@ -8,7 +8,7 @@
 #include "SDL2/SDL_atomic.h"
 #include "SDL2/SDL_mutex.h"
 
-//#define SHOW_DISAS
+#define SHOW_DISAS
 
 #ifndef SHOW_DISAS
     #define DISAS_PRINT( fmt, ... ) ((void)0)
@@ -149,7 +149,7 @@ uint32_t FLG_Z, FLG_N, FLG_H, FLG_C, FLG_IME;
 
 #define PUSH(ss) (memory_write16(REG_SP-2, ss), REG_SP-=2)
 #define POP(ss) ((ss)=memory_read16(REG_SP), REG_SP+=2)
-#define PUSH_AF (tmp=REG_A<<8, tmp|=(FLG_Z<<7|FLG_N<<6|FLG_H<<5|FLG_C_01<<4), memory_write16(REG_SP-2, tmp), REG_SP-=2)
+#define PUSH_AF (tmp=REG_A<<8, tmp|=((!!FLG_Z)<<7|(!!FLG_N)<<6|(!!FLG_H)<<5|FLG_C_01<<4), memory_write16(REG_SP-2, tmp), REG_SP-=2)
 #define POP_AF (REG_A=memory_read8(REG_SP+1), tmp=memory_read8(REG_SP), FLG_Z=tmp&0x80, FLG_N=((tmp&0x40)==0x40), FLG_H=((tmp&0x20)==0x20), FLG_C=((tmp&0x10)==0x10), REG_SP+=2)
 
 #define ADDHL_16(v) (cr=REG_HL+(v), FLG_N=0, FLG_C=cr&0x10000, FLG_H=(((v)&0xfff)+(REG_HL&0xfff))&0x1000, REG_HL=cr)
