@@ -315,42 +315,25 @@ int cpu_exec(void *ptr) {
 		case 0x26: /* LD H,n ---- */  		REG_H=OPERAND8; REG_PC+=2; continue;
 		case 0x27: /* DAA - Z-HC */
 			{
-				uint8_t high=REG_A>>4, low=REG_A&0xf;
-				uint8_t diff;
-				if(FLG_N){
-					if(FLG_C){
-						if(low<0xa)
-							if(FLG_H)
-								diff=0x66;
-							else
-								diff=0x60;
-						else
-							diff=0x66;
-					}else{
-						if(low<0xa)
-							if(high<0xa){
-								if(FLG_H)
-									diff=0x06;
-								else
-									diff=0x00;
-							}else{
-								FLG_C=1;
-								if(FLG_H)
-									diff=0x66;
-								else
-									diff=0x60;
-							}
-						else
-							if(high<0x9){
-								diff=0x06;
-							}else{
-								FLG_C=1;
-								diff=0x66;
-							}
-					}
+				int a = REG_A;
+				if(!FLG_N){
+					if(FLG_H || (a&0xf)>0x9)
+						a+=0x6;
+					if(FLG_C || a>0x9f)
+						a+=0x60;
+				}else{
+					if(FLG_H)
+						a=(a-6)&0xff;
+					if(FLG_C)
+						a-=0x60;
 				}
-				FLG_H=0;
-				FLG_Z=!REG_A;
+				FLG_H=0; FLG_Z=0;
+				if((a&0x100) == 0x100)
+					FLG_C=1;
+				a&=0xff;
+				if(a==0)
+					FLG_Z=1;
+				REG_A=(uint8_t)a;
 				REG_PC+=1; continue;
 			}
 		case 0x28: /* JR Z,* ---- */  		if(FLG_Z){JR;} REG_PC+=2; continue;
