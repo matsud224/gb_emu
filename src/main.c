@@ -11,10 +11,9 @@
 #include "cartridge.h"
 #include "memory.h"
 
-#include "SDL2/SDL_mutex.h"
-#include "SDL2/SDL_thread.h"
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_ttf.h"
+#include "SDL2/SDL_timer.h"
 #include "SDL2/SDL_keyboard.h"
 #include "SDL2/SDL_gamecontroller.h"
 
@@ -277,14 +276,6 @@ int main(int argc, char *argv[]) {
 */
 	startup();
 
-	SDL_Thread *cpu_thread = SDL_CreateThread(cpu_exec, "cpu_thread", (void*)NULL);
-	if(cpu_thread==NULL){
-		printf("SDL_CreateThread failed: %s\n", SDL_GetError());
-		memory_free();
-		return -1;
-	}
-
-	//3つ使う必要ない（重ねればいい）と思われるので、描画関数を書き終えてから見直す
 	static Uint32 bitmap[160*144];
 	SDL_Surface *bitmap_surface=SDL_CreateRGBSurfaceFrom((void *)bitmap, 160, 144, 32, 160*4,
 	       0x00ff0000,0x0000ff00,0x000000ff,0xff000000);
@@ -303,6 +294,7 @@ int main(int argc, char *argv[]) {
 
 	TIMER_START(fps_timer);
 
+	int quit = 0;
 	while(!quit){
 		while(SDL_PollEvent(&e)!=0){
 			switch(e.type){
@@ -358,15 +350,15 @@ int main(int argc, char *argv[]) {
 			SDL_SetWindowTitle(main_window, wndtitle);
 		}
 
-		SDL_SetRenderDrawColor(window_renderer, 0xff, 0xff, 0xff, 0xff);
+		SDL_SetRenderDrawColor(window_renderer, ACTUALCOLOR[0].r, ACTUALCOLOR[0].g, ACTUALCOLOR[0].b, 0xff);
 		SDL_RenderClear(window_renderer);
 
 		uint8_t lcdc=INTERNAL_IO[IO_LCDC_R];
 		if(lcdc&0x80){
 			//LCDがON
 			RST_LY;
-			change_lcdmode(2); wait_cpuclk(83);
-			change_lcdmode(3); wait_cpuclk(175);
+			change_lcdmode(2); cpu_exec(83);
+			change_lcdmode(3); cpu_exec(175);
 
 			if(lcdc&0x1)
 				draw_background(lcdc, bitmap);
@@ -384,31 +376,31 @@ int main(int argc, char *argv[]) {
 			SDL_DestroyTexture(texture);
 
 			INC_LY;
-			change_lcdmode(0); wait_cpuclk(207);
+			change_lcdmode(0); cpu_exec(207);
 
 			while(INTERNAL_IO[IO_LY_R]<143){
-				change_lcdmode(2); wait_cpuclk(83);
-				change_lcdmode(3); wait_cpuclk(175);
+				change_lcdmode(2); cpu_exec(83);
+				change_lcdmode(3); cpu_exec(175);
 				INC_LY;
-				change_lcdmode(0); wait_cpuclk(207);
+				change_lcdmode(0); cpu_exec(207);
 			}
 
 			INC_LY;
 			change_lcdmode(LCDMODE_VBLANK);
-			wait_cpuclk(4560);
+		}else{
+			cpu_exec(70224);
 		}
 
 		SDL_RenderPresent(window_renderer);
 		frame_count++;
 
 		if(lcdc&0x80){
-			while(INTERNAL_IO[IO_LY_R]<152)
+			while(INTERNAL_IO[IO_LY_R]<152){
+				cpu_exec(510);
 				INC_LY;
+			}
 		}
 	}
-
-	cpu_post_all_semaphore();
-	SDL_WaitThread(cpu_thread, NULL);
 
 	if(joystick!=NULL)
 		SDL_JoystickClose(joystick);

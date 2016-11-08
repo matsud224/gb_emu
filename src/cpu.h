@@ -6,7 +6,7 @@ void startup(void);
 void cpu_post_all_semaphore();
 void wait_cpuclk(int clk);
 void request_interrupt(uint8_t type);
-int cpu_exec(void *ptr);
+void cpu_exec(int cycles);
 int disas_one(uint16_t pc);
 
 #define INT_VBLANK 0x1

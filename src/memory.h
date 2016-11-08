@@ -1,17 +1,13 @@
 #pragma once
 
 #include <inttypes.h>
-#include "SDL2/SDL_atomic.h"
 #include "SDL2/SDL_gamecontroller.h"
 
 
 extern uint8_t LCDMODE;
-extern SDL_atomic_t REG_IF, REG_IE;
-
-#define CAS_UPDATE(target, val) do{ \
-	int old, new; \
-	do{ old=(target).value; new=val; }while(SDL_AtomicCAS(&(target), old, new)==SDL_FALSE); \
-	}while(0);
+extern uint8_t REG_IF, REG_IE;
+extern uint32_t DIV;
+extern uint16_t TIMA;
 
 extern uint8_t*		INTERNAL_VRAM;
 extern uint8_t*		INTERNAL_OAM;

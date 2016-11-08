@@ -36,13 +36,13 @@ struct cartridge *cart_init(uint8_t *rom) {
 		printf("cart_init: cgb only\n");
 		return NULL;
 	}
-/*
+
 	if(memcmp(cart->header.logo, VALID_LOGO, sizeof(VALID_LOGO))!=0) {
-		free(cart);
-		printf("cart_init: header logo is invalid.\n");
-		return NULL;
+		//free(cart);
+		printf("cart_init warning: header logo is invalid.\n");
+		//return NULL;
 	}
-*/
+
 	cart->rom0 = cart->rom;
 
 	switch(cart->header.carttype) {
