@@ -43,6 +43,10 @@
 		<Unit filename="src/cpu.h">
 			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
+		<Unit filename="src/lcd.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/lcd.h" />
 		<Unit filename="src/main.c">
 			<Option compilerVar="CC" />
 		</Unit>
@@ -50,6 +54,10 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/memory.h" />
+		<Unit filename="src/sound.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/sound.h" />
 		<Extensions>
 			<envvars />
 			<code_completion />

@@ -158,6 +158,7 @@ uint8_t memory_read8(uint16_t src) {
 				uint8_t p1=INTERNAL_IO[IO_P1_R];
 				const Uint8 *state=SDL_GetKeyboardState(NULL);
 				int p10=1, p11=1, p12=1, p13=1, p14 = p1&0x10, p15 = p1&0x20;
+				SDL_PumpEvents();
 				if(INPUTTYPE == INPUT_KEYBOARD){
 					if(!p14){
 						if(state[SDL_GetScancodeFromKey(SDLK_RIGHT)]) p10=0;
