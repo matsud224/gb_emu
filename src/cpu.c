@@ -168,7 +168,7 @@ static const int clock_bit_table[4] = {10, 4, 6, 8};
 			if((DIV^div_old)&(1<<clock_bit_table[tac&0x3])) \
 				TIMA++; \
 			if(TIMA&0x100){ \
-				TIMA=INTERNAL_IO[IO_TMA_R]; \
+				TIMA=INTERNAL_IO[IO_TMA_R]+(TIMA&0xff); \
 				request_interrupt(INT_TIMER); \
 			} \
 		} \
@@ -261,8 +261,8 @@ void cpu_exec(int cycles) {
 		}
 
 		#ifdef SHOW_DISAS
-			fprintf(stdout, "PC=%4X SP=%4X A=%2X BC=%2X DE=%2X HL=%4X IME=%d OP=%2X LY=%d  ",
-					REG_PC, REG_SP, REG_A, REG_BC, REG_DE, REG_HL, FLG_IME, memory_read8(REG_PC), INTERNAL_IO[IO_LY_R]);
+			fprintf(stdout, "PC=%4X SP=%4X A=%2X BC=%2X DE=%2X HL=%4X IME=%d OP=%2X TIMA=%X  ",
+					REG_PC, REG_SP, REG_A, REG_BC, REG_DE, REG_HL, FLG_IME, memory_read8(REG_PC), TIMA);
 			disas_one(REG_PC);
 		#endif // SHOW_DISAS
 
@@ -303,7 +303,7 @@ void cpu_exec(int cycles) {
 		case 0x1D: /* DEC E Z1H- */  		DEC(REG_E); REG_PC+=1; CLOCK(4); continue;
 		case 0x1E: /* LD E,n ---- */  		REG_E=OPERAND8; REG_PC+=2; CLOCK(8); continue;
 		case 0x1F: /* RRA - 000C */  		RRA; REG_PC+=1; CLOCK(4); continue;
-		case 0x20: /* JR NZ,* ---- */  		if(!FLG_Z){JR;} REG_PC+=2; CLOCK(8); continue;
+		case 0x20: /* JR NZ,* ---- */  		if(!FLG_Z){JR; CLOCK(4);} REG_PC+=2; CLOCK(8); continue;
 		case 0x21: /* LD HL,nn ---- */  	REG_HL=OPERAND16; REG_PC+=3; CLOCK(12); continue;
 		case 0x22: /* LD (HL+),A ---- */  	memory_write8(REG_HL, REG_A); REG_HL++; REG_PC+=1; CLOCK(8); continue;
 		case 0x23: /* INC HL ---- */  		REG_HL++; REG_PC+=1; CLOCK(8); continue;
@@ -333,7 +333,7 @@ void cpu_exec(int cycles) {
 				REG_A=(uint8_t)a;
 				REG_PC+=1; CLOCK(4); continue;
 			}
-		case 0x28: /* JR Z,* ---- */  		if(FLG_Z){JR;} REG_PC+=2; CLOCK(8); continue;
+		case 0x28: /* JR Z,* ---- */  		if(FLG_Z){JR; CLOCK(4);} REG_PC+=2; CLOCK(8); continue;
 		case 0x29: /* ADD HL,HL -0HC */  	ADDHL_16(REG_HL); REG_PC+=1; CLOCK(8); continue;
 		case 0x2A: /* LD A,(HL+) ---- */  	REG_A=memory_read8(REG_HL); REG_HL++; REG_PC+=1; CLOCK(8); continue;
 		case 0x2B: /* DEC HL ---- */  		REG_HL--; REG_PC+=1; CLOCK(8); continue;
@@ -341,7 +341,7 @@ void cpu_exec(int cycles) {
 		case 0x2D: /* DEC L Z1H- */  		DEC(REG_L); REG_PC+=1; CLOCK(4); continue;
 		case 0x2E: /* LD L,n ---- */  		REG_L=OPERAND8; REG_PC+=2; CLOCK(8); continue;
 		case 0x2F: /* CPL - -11- */  		REG_A=~REG_A; FLG_N=1; FLG_H=1; REG_PC+=1; CLOCK(4); continue;
-		case 0x30: /* JR NC,* ---- */  		if(!FLG_C){JR;} REG_PC+=2; CLOCK(8); continue;
+		case 0x30: /* JR NC,* ---- */  		if(!FLG_C){JR; CLOCK(4);} REG_PC+=2; CLOCK(8); continue;
 		case 0x31: /* LD SP,nn ---- */  	REG_SP=OPERAND16; REG_PC+=3; CLOCK(12); continue;
 		case 0x32: /* LD (HL-),A ---- */  	memory_write8(REG_HL, REG_A); REG_HL--; REG_PC+=1; CLOCK(8); continue;
 		case 0x33: /* INC SP ---- */  		REG_SP++; REG_PC+=1; CLOCK(8); continue;
@@ -349,7 +349,7 @@ void cpu_exec(int cycles) {
 		case 0x35: /* DEC (HL) Z1H- */  	DEC_HL; REG_PC+=1; CLOCK(12); continue;
 		case 0x36: /* LD (HL),n ---- */  	memory_write8(REG_HL, OPERAND8); REG_PC+=2; CLOCK(12); continue;
 		case 0x37: /* SCF - -001 */  		FLG_C=1; FLG_H=0; FLG_N=0; REG_PC+=1; CLOCK(4); continue;
-		case 0x38: /* JR C,* ---- */  		if(FLG_C){JR;} REG_PC+=2; CLOCK(8); continue;
+		case 0x38: /* JR C,* ---- */  		if(FLG_C){JR; CLOCK(4);} REG_PC+=2; CLOCK(8); continue;
 		case 0x39: /* ADD HL,SP -0HC */  	ADDHL_16(REG_SP); REG_PC+=1; CLOCK(8); continue;
 		case 0x3A: /* LD A,(HL-) ---- */  	REG_A=memory_read8(REG_HL); REG_HL--; REG_PC+=1; CLOCK(8); continue;
 		case 0x3B: /* DEC SP ---- */  		REG_SP--;  REG_PC+=1; CLOCK(8); continue;
@@ -488,17 +488,17 @@ void cpu_exec(int cycles) {
 		case 0xBD: /* CP L Z1HC */  		BINOPA_CP(REG_L); REG_PC+=1; CLOCK(4); continue;
 		case 0xBE: /* CP (HL) Z1HC */  		BINOPA_CP(memory_read8(REG_HL)); REG_PC+=1; CLOCK(8); continue;
 		case 0xBF: /* CP A Z1HC */  		BINOPA_CP(REG_A); REG_PC+=1; CLOCK(4); continue;
-		case 0xC0: /* RET NZ ---- */  		if(!FLG_Z){RET;}else{REG_PC+=1;} CLOCK(8); continue;
+		case 0xC0: /* RET NZ ---- */  		if(!FLG_Z){RET; CLOCK(20);}else{REG_PC+=1; CLOCK(8);} continue;
 		case 0xC1: /* POP BC ---- */  		POP(REG_BC); REG_PC+=1; CLOCK(12); continue;
-		case 0xC2: /* JP NZ,nn ---- */  	if(!FLG_Z){JP(OPERAND16);}else{REG_PC+=3;} CLOCK(12); continue;
+		case 0xC2: /* JP NZ,nn ---- */  	if(!FLG_Z){JP(OPERAND16); CLOCK(16);}else{REG_PC+=3; CLOCK(12);} continue;
 		case 0xC3: /* JP nn ---- */  		JP(OPERAND16); CLOCK(16); continue;
-		case 0xC4: /* CALL NZ,nn ---- */  	if(!FLG_Z){CALL(REG_PC+3);}else{REG_PC+=3;} CLOCK(12); continue;
+		case 0xC4: /* CALL NZ,nn ---- */  	if(!FLG_Z){CALL(REG_PC+3); CLOCK(24);}else{REG_PC+=3; CLOCK(12);} continue;
 		case 0xC5: /* PUSH BC ---- */  		PUSH(REG_BC); REG_PC+=1; CLOCK(16); continue;
 		case 0xC6: /* ADD A,# Z0HC */  		BINOPA_ADD(OPERAND8); REG_PC+=2; CLOCK(8); continue;
 		case 0xC7: /* RST 00H ---- */ 	 	RST(0x00); CLOCK(16); continue;
-		case 0xC8: /* RET Z ---- */  		if(FLG_Z){RET;}else{REG_PC+=1;} CLOCK(8); continue;
+		case 0xC8: /* RET Z ---- */  		if(FLG_Z){RET; CLOCK(20);}else{REG_PC+=1; CLOCK(8);} continue;
 		case 0xC9: /* RET - ---- */  		RET; CLOCK(16); continue;
-		case 0xCA: /* JP Z,nn ---- */  		if(FLG_Z){JP(OPERAND16);}else{REG_PC+=3;} CLOCK(12); continue;
+		case 0xCA: /* JP Z,nn ---- */  		if(FLG_Z){JP(OPERAND16); CLOCK(16);}else{REG_PC+=3; CLOCK(12);} continue;
 		case 0xCB:
 			switch(memory_read8(REG_PC+1)){
 			case 0x00: /* RLC B Z00C */  	RLC(REG_B); REG_PC+=2; CLOCK(8); continue;
@@ -758,21 +758,21 @@ void cpu_exec(int cycles) {
 			case 0xFE: /* SET 7,(HL) ---- */SET_HL(7); REG_PC+=2; CLOCK(16); continue;
 			case 0xFF: /* SET 7,A ---- */  	SET(7, REG_A); REG_PC+=2; CLOCK(8); continue;
 			}
-		case 0xCC: /* CALL Z,nn ---- */  	if(FLG_Z){CALL(REG_PC+3);}else{REG_PC+=3;} CLOCK(12); continue;
+		case 0xCC: /* CALL Z,nn ---- */  	if(FLG_Z){CALL(REG_PC+3); CLOCK(24);}else{REG_PC+=3; CLOCK(12);} continue;
 		case 0xCD: /* CALL nn ---- */  		CALL(REG_PC+3); CLOCK(24); continue;
 		case 0xCE: /* ADC A,# Z0HC */  		BINOPA_ADC(OPERAND8); REG_PC+=2; CLOCK(8); continue;
 		case 0xCF: /* RST 08H ---- */  		RST(0x08); CLOCK(16); continue;
-		case 0xD0: /* RET NC ---- */  		if(!FLG_C){RET;}else{REG_PC+=1;} CLOCK(8); continue;
+		case 0xD0: /* RET NC ---- */  		if(!FLG_C){RET; CLOCK(20);}else{REG_PC+=1; CLOCK(8);} continue;
 		case 0xD1: /* POP DE ---- */  		POP(REG_DE); REG_PC+=1; CLOCK(12); continue;
-		case 0xD2: /* JP NC,nn ---- */  	if(!FLG_C){JP(OPERAND16);}else{REG_PC+=3;} CLOCK(12); continue;
-		case 0xD4: /* CALL NC,nn ---- */ 	if(!FLG_C){CALL(REG_PC+3);}else{REG_PC+=3;} CLOCK(12); continue;
+		case 0xD2: /* JP NC,nn ---- */  	if(!FLG_C){JP(OPERAND16); CLOCK(16);}else{REG_PC+=3; CLOCK(12);} continue;
+		case 0xD4: /* CALL NC,nn ---- */ 	if(!FLG_C){CALL(REG_PC+3); CLOCK(24);}else{REG_PC+=3; CLOCK(12);} continue;
 		case 0xD5: /* PUSH DE ---- */  		PUSH(REG_DE); REG_PC+=1; CLOCK(16); continue;
 		case 0xD6: /* SUB # Z1HC */  		BINOPA_SUB(OPERAND8); REG_PC+=2; CLOCK(8); continue;
 		case 0xD7: /* RST 10H ---- */  		RST(0x10); CLOCK(16); continue;
-		case 0xD8: /* RET C ---- */  		if(FLG_C){RET;}else{REG_PC+=1;} CLOCK(8); continue;
+		case 0xD8: /* RET C ---- */  		if(FLG_C){RET; CLOCK(20);}else{REG_PC+=1; CLOCK(8);} continue;
 		case 0xD9: /* RETI - ---- */ 		RET; FLG_IME=1; CLOCK(16); continue;
-		case 0xDA: /* JP C,nn ---- */  		if(FLG_C){JP(OPERAND16);}else{REG_PC+=3;} CLOCK(12); continue;
-		case 0xDC: /* CALL C,nn ---- */  	if(FLG_C){CALL(REG_PC+3);}else{REG_PC+=3;} CLOCK(12); continue;
+		case 0xDA: /* JP C,nn ---- */  		if(FLG_C){JP(OPERAND16); CLOCK(16);}else{REG_PC+=3; CLOCK(12);} continue;
+		case 0xDC: /* CALL C,nn ---- */  	if(FLG_C){CALL(REG_PC+3); CLOCK(24);}else{REG_PC+=3; CLOCK(12);} continue;
 		case 0xDE: /* SBC A,# Z1HC */  		BINOPA_SBC(OPERAND8); REG_PC+=2; CLOCK(8); continue;
 		case 0xDF: /* RST 18H ---- */  		RST(0x18); CLOCK(16); continue;
 		case 0xE0: /* LD ($FF00+n),A ---- */memory_write8(0xff00+OPERAND8, REG_A); REG_PC+=2; CLOCK(12); continue;
