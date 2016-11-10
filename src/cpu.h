@@ -1,13 +1,9 @@
 #pragma once
 
-extern int quit;
-
 void startup(void);
-void cpu_post_all_semaphore();
-void wait_cpuclk(int clk);
-void request_interrupt(uint8_t type);
+void cpu_request_interrupt(uint8_t type);
 void cpu_exec(int cycles);
-int disas_one(uint16_t pc);
+int cpu_disas_one(uint16_t pc);
 
 #define INT_VBLANK 0x1
 #define INT_LCDSTAT 0x2

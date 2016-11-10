@@ -1,11 +1,16 @@
 #include "memory.h"
 #include "cartridge.h"
 #include "cpu.h"
+#include "lcd.h"
+#include "joypad.h"
 #include <stdlib.h>
 #include <time.h>
 #include "SDL2/SDL_keyboard.h"
 #include "SDL2/SDL_scancode.h"
 #include "SDL2/SDL_gamecontroller.h"
+
+#define IO_DIV_R 0x04
+#define IO_TIMA_R 0x05
 
 uint8_t*			INTERNAL_VRAM = NULL;
 static uint8_t*		INTERNAL_WRAM = NULL;
@@ -15,12 +20,6 @@ static uint8_t*		INTERNAL_RESERVED = NULL;
 uint8_t*			INTERNAL_IO = NULL;
 static uint8_t*		INTERNAL_STACK = NULL;
 
-
-int INPUTTYPE; //keyboard or gamepad
-SDL_Joystick *joystick = NULL;
-
-uint8_t REG_IF, REG_IE;
-uint8_t LCDMODE;
 uint32_t DIV;
 uint16_t TIMA;
 
@@ -33,10 +32,8 @@ int memory_init(struct cartridge *c) {
 	INTERNAL_WRAM_MIRROR = INTERNAL_WRAM;
 	if((INTERNAL_OAM = malloc(sizeof(uint8_t) * 0xa0)) == NULL) goto err;
 	if((INTERNAL_RESERVED = malloc(sizeof(uint8_t) * 0x60)) == NULL) goto err;
-	if((INTERNAL_IO = malloc(sizeof(uint8_t) * 0x80)) == NULL) goto err;
+	if((INTERNAL_IO = malloc(sizeof(uint8_t) * 0x100)) == NULL) goto err;
 	if((INTERNAL_STACK = malloc(sizeof(uint8_t) * 0x7f)) == NULL) goto err;
-	LCDMODE = LCDMODE_VBLANK;
-	REG_IF=0;
 	return 0;
 err:
 	memory_free();
@@ -87,7 +84,7 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 		case IO_TIMA_R: TIMA=value; break;
 		case IO_TMA_R: INTERNAL_IO[IO_TMA_R]=value; break;
 		case IO_TAC_R: INTERNAL_IO[IO_TAC_R]=value;	break;
-		case IO_IF_R: REG_IF=value; break;
+		case IO_IF_R: INTERNAL_IO[IO_IF_R]=value; break;
 		case IO_LCDC_R: INTERNAL_IO[IO_LCDC_R]=value; break;
 		case IO_STAT_R: INTERNAL_IO[IO_STAT_R]=value; break;
 		case IO_SCY_R: INTERNAL_IO[IO_SCY_R]=value; break;
@@ -113,7 +110,7 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 		INTERNAL_STACK[dst-V_INTERNAL_STACK] = value;
 	}else{
 		//INTERNAL_INTMASK
-		REG_IE = value;
+		INTERNAL_IO[IO_IE_R] = value;
 	}
 
 	return value;
@@ -153,51 +150,16 @@ uint8_t memory_read8(uint16_t src) {
 	}else if(src < V_INTERNAL_STACK){
 		//INTERNAL_IO
 		switch(src-V_INTERNAL_IO){
-		case IO_P1_R:
-			{
-				uint8_t p1=INTERNAL_IO[IO_P1_R];
-				const Uint8 *state=SDL_GetKeyboardState(NULL);
-				int p10=1, p11=1, p12=1, p13=1, p14 = p1&0x10, p15 = p1&0x20;
-				SDL_PumpEvents();
-				if(INPUTTYPE == INPUT_KEYBOARD){
-					if(!p14){
-						if(state[SDL_GetScancodeFromKey(SDLK_RIGHT)]) p10=0;
-						if(state[SDL_GetScancodeFromKey(SDLK_LEFT)]) p11=0;
-						if(state[SDL_GetScancodeFromKey(SDLK_UP)]) p12=0;
-						if(state[SDL_GetScancodeFromKey(SDLK_DOWN)]) p13=0;
-					}
-					if(!p15){
-						if(state[SDL_GetScancodeFromKey(SDLK_z)]) p10=0;
-						if(state[SDL_GetScancodeFromKey(SDLK_x)]) p11=0;
-						if(state[SDL_GetScancodeFromKey(SDLK_LEFTBRACKET)]) p12=0;
-						if(state[SDL_GetScancodeFromKey(SDLK_RIGHTBRACKET)]) p13=0;
-					}
-				}else if(INPUTTYPE == INPUT_JOYSTICK){
-					if(!p14){
-						if(SDL_JoystickGetAxis(joystick, 0) > JOYSTICK_DEAD_ZONE) p10=0;
-						if(SDL_JoystickGetAxis(joystick, 0) < -JOYSTICK_DEAD_ZONE) p11=0;
-						if(SDL_JoystickGetAxis(joystick, 1) < -JOYSTICK_DEAD_ZONE) p12=0;
-						if(SDL_JoystickGetAxis(joystick, 1) > JOYSTICK_DEAD_ZONE) p13=0;
-					}
-					if(!p15){
-						if(SDL_JoystickGetButton(joystick, JOYSTICK_BUTTON_A)) p10=0;
-						if(SDL_JoystickGetButton(joystick, JOYSTICK_BUTTON_B)) p11=0;
-						if(SDL_JoystickGetButton(joystick, JOYSTICK_BUTTON_SELECT)) p12=0;
-						if(SDL_JoystickGetButton(joystick, JOYSTICK_BUTTON_START)) p13=0;
-					}
-				}
-
-				return 0x3<<6 | p15<<5 | p14<<4 | p13<<3 | p12<<2 | p11<<1 | p10;
-			}
+		case IO_P1_R: return joypad_status();
 		case IO_DIV_R: return DIV>>8;
 		case IO_TIMA_R: return TIMA;
 		case IO_TMA_R: return INTERNAL_IO[IO_TMA_R];
 		case IO_TAC_R: return INTERNAL_IO[IO_TAC_R];
-		case IO_IF_R: return REG_IF;
+		case IO_IF_R: return INTERNAL_IO[IO_IF_R];
 		case IO_LCDC_R: return INTERNAL_IO[IO_LCDC_R];
 		case IO_STAT_R:
 			//下位3bitは別で管理
-			return (INTERNAL_IO[IO_STAT_R]&0xf8) | ((INTERNAL_IO[IO_LY_R]==INTERNAL_IO[IO_LYC_R])<<2) | LCDMODE;
+			return (INTERNAL_IO[IO_STAT_R]&0xf8) | ((INTERNAL_IO[IO_LY_R]==INTERNAL_IO[IO_LYC_R])<<2) | lcd_get_mode();
 		case IO_SCY_R: return INTERNAL_IO[IO_SCY_R];
 		case IO_SCX_R: return INTERNAL_IO[IO_SCX_R];
 		case IO_LY_R: return INTERNAL_IO[IO_LY_R];
@@ -214,7 +176,7 @@ uint8_t memory_read8(uint16_t src) {
 		return INTERNAL_STACK[src-V_INTERNAL_STACK];
 	}else{
 		//INTERNAL_INTMASK
-		return REG_IE;
+		return INTERNAL_IO[IO_IE_R];
 	}
 
 	return 0;

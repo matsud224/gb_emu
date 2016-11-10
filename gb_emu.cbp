@@ -43,6 +43,10 @@
 		<Unit filename="src/cpu.h">
 			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
+		<Unit filename="src/joypad.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/joypad.h" />
 		<Unit filename="src/lcd.c">
 			<Option compilerVar="CC" />
 		</Unit>

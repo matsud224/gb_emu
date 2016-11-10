@@ -1,11 +1,8 @@
 #pragma once
 
 #include <inttypes.h>
-#include "SDL2/SDL_gamecontroller.h"
 
 
-extern uint8_t LCDMODE;
-extern uint8_t REG_IF, REG_IE;
 extern uint32_t DIV;
 extern uint16_t TIMA;
 
@@ -13,24 +10,6 @@ extern uint8_t*		INTERNAL_VRAM;
 extern uint8_t*		INTERNAL_OAM;
 extern uint8_t*		INTERNAL_IO;
 
-extern int INPUTTYPE;
-#define INPUT_KEYBOARD 0
-#define INPUT_JOYSTICK 1
-extern SDL_Joystick *joystick;
-
-//使用するジョイスティックに応じて以下を変更
-//ジョイスティックの感度
-#define JOYSTICK_DEAD_ZONE 8000
-//ボタン番号の対応
-#define JOYSTICK_BUTTON_A 0
-#define JOYSTICK_BUTTON_B 1
-#define JOYSTICK_BUTTON_SELECT 6
-#define JOYSTICK_BUTTON_START 7
-
-#define LCDMODE_HBLANK 0
-#define LCDMODE_VBLANK 1
-#define LCDMODE_SEARCHOAM 2
-#define LCDMODE_TRANSFERRING 3
 
 #define V_CART_ROM0 		0x0000
 #define	V_CART_ROMN			0x4000
@@ -92,8 +71,6 @@ extern SDL_Joystick *joystick;
 #define IO_P1_R 0x00
 #define IO_SB_R 0x01
 #define IO_SC_R 0x02
-#define IO_DIV_R 0x04
-#define IO_TIMA_R 0x05
 #define IO_TMA_R 0x06
 #define IO_TAC_R 0x07
 #define IO_IF_R 0x0F

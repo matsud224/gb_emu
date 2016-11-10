@@ -1,12 +1,7 @@
 #include <stdio.h>
 #include <inttypes.h>
-#include <assert.h>
-
 #include "cpu.h"
 #include "memory.h"
-
-#include "SDL2/SDL_atomic.h"
-#include "SDL2/SDL_mutex.h"
 
 //#define SHOW_DISAS
 
@@ -169,7 +164,7 @@ static const int clock_bit_table[4] = {10, 4, 6, 8};
 				TIMA++; \
 			if(TIMA&0x100){ \
 				TIMA=INTERNAL_IO[IO_TMA_R]+(TIMA&0xff); \
-				request_interrupt(INT_TIMER); \
+				cpu_request_interrupt(INT_TIMER); \
 			} \
 		} \
 	}while(0)
@@ -225,8 +220,8 @@ void startup() {
 	REG_PC=0x100;
 }
 
-void request_interrupt(uint8_t type) {
-	REG_IF |= type;
+void cpu_request_interrupt(uint8_t type) {
+	INTERNAL_IO[IO_IF_R] |= type;
 }
 
 void cpu_exec(int cycles) {
@@ -234,7 +229,7 @@ void cpu_exec(int cycles) {
 
 	while(cycles>0){
 		//割り込みチェック
-		uint8_t masked=REG_IF&REG_IE;
+		uint8_t masked=INTERNAL_IO[IO_IF_R]&INTERNAL_IO[IO_IE_R];
 		uint8_t cause = masked&(~masked + 1); //1になっている一番下の桁
 		if(cause){
 			if(CPUMODE == CPU_MODE_HALT && FLG_IME==0){
@@ -242,7 +237,7 @@ void cpu_exec(int cycles) {
 			}else if(FLG_IME && CPUMODE != CPU_MODE_STOP){
 				CPUMODE = CPU_MODE_NORMAL;
 				FLG_IME=0;
-				REG_IF &= (~cause);
+				INTERNAL_IO[IO_IF_R] &= (~cause);
 				switch(cause){
 				case INT_VBLANK: CALL_ADDR(0x40, REG_PC); break;
 				case INT_LCDSTAT: CALL_ADDR(0x48, REG_PC); break;
@@ -263,7 +258,7 @@ void cpu_exec(int cycles) {
 		#ifdef SHOW_DISAS
 			fprintf(stdout, "PC=%4X SP=%4X A=%2X BC=%2X DE=%2X HL=%4X IME=%d OP=%2X TIMA=%X  ",
 					REG_PC, REG_SP, REG_A, REG_BC, REG_DE, REG_HL, FLG_IME, memory_read8(REG_PC), TIMA);
-			disas_one(REG_PC);
+			cpu_disas_one(REG_PC);
 		#endif // SHOW_DISAS
 
 		switch(memory_read8(REG_PC)){
@@ -804,7 +799,7 @@ void cpu_exec(int cycles) {
 }
 
 
-int disas_one(uint16_t pc) {
+int cpu_disas_one(uint16_t pc) {
 	switch(memory_read8(pc)){
 	case 0x36:
 		//LD (HL),n
