@@ -21,6 +21,7 @@ struct gb_carthdr {
 };
 
 struct cartridge *cart_init(uint8_t *rom);
+void cart_setram(struct cartridge *cart, uint8_t *ram);
 struct gb_carthdr *cart_header(struct cartridge *cart);
 void cart_rom0_write8(struct cartridge *cart, uint16_t dst, uint8_t value);
 void cart_romn_write8(struct cartridge *cart, uint16_t dst, uint8_t value);

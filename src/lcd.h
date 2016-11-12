@@ -9,6 +9,7 @@
 
 void lcd_init(SDL_Surface *surface);
 uint8_t lcd_get_mode(void);
+uint8_t lcd_enabled(void);
 void lcd_change_mode(int mode);
 void lcd_clear(Uint32 buf[]);
 void lcd_draw_background_oneline(Uint32 buf[]);

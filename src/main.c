@@ -54,6 +54,41 @@ static uint8_t *open_rom(char* filename) {
 	return data;
 }
 
+static uint8_t *open_ram(char* filename, size_t size) {
+	int fd;
+	struct stat sbuf;
+	fd = open(filename, O_RDWR);
+	if(fd == -1){
+		//存在しなければ、新たにファイルを作成
+		fd = open(filename, O_RDWR|O_CREAT, S_IWUSR|S_IRUSR);
+		if(fd == -1)
+			return NULL;
+		char c = '\0';
+		for(int i=0; i<size; i++)
+			write(fd, &c, 1);
+		lseek(fd, 0, SEEK_SET);
+		puts("new save data created");
+	}else{
+		if(fstat(fd, &sbuf) == -1){
+			close(fd);
+			return NULL;
+		}
+		if(sbuf.st_size!=size){
+			puts("mismatch between ram size and save data");
+			close(fd);
+			return NULL;
+		}
+	}
+
+	uint8_t *data = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
+	if(data == MAP_FAILED){
+		close(fd);
+		return NULL;
+	}
+
+	return data;
+}
+
 static int sdl_init() {
 	if( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER ) < 0 ){
 		printf( "SDL Init failed : %s\n", SDL_GetError() );
@@ -94,7 +129,7 @@ static int sdl_init() {
 #define RST_LY (((INTERNAL_IO[IO_LY_R]=0)==INTERNAL_IO[IO_LYC_R] && INTERNAL_IO[IO_STAT_R]&0x40)?cpu_request_interrupt(INT_LCDSTAT):0)
 
 int main(int argc, char *argv[]) {
-	if(argc != 2){
+	if(argc != 2 && argc != 3){
 		printf("too few arguments\n");
 		return -1;
 	}
@@ -110,9 +145,20 @@ int main(int argc, char *argv[]) {
 		printf("cart_init failed\n");
 		return -1;
 	}
+
+	static const int ramsize_table[] = {0,2048,8192,8192*4,8192*16,8192*8};
 	struct gb_carthdr *hdr = cart_header(cart);
-    printf("title: %.16s\ncgbflag: 0x%X\ncarttype: 0x%X\nromsize: 0x%X\nramsize: 0x%X\n",
-		 hdr->title, hdr->cgbflag, hdr->carttype, hdr->romsize, hdr->ramsize);
+    printf("title: %.16s\ncgbflag: 0x%X\ncarttype: 0x%X\nromsize: 0x%X\nramsize: 0x%X(%dKB)\n",
+		 hdr->title, hdr->cgbflag, hdr->carttype, hdr->romsize, hdr->ramsize, ramsize_table[hdr->ramsize]);
+
+	if(hdr->ramsize!=0){
+		uint8_t *ram = open_ram(argv[2], ramsize_table[hdr->ramsize]);
+		if(ram == NULL){
+			printf("open_ram failed\n");
+			return -1;
+		}
+		cart_setram(cart, ram);
+	}
 
 	if(memory_init(cart)){
 		free(cart);
@@ -201,41 +247,38 @@ int main(int argc, char *argv[]) {
 		if(INTERNAL_IO[IO_LCDC_R]&0x80){
 			//LCDがON
 			RST_LY;
-
+			lcd_clear(bitmap);
 			while(INTERNAL_IO[IO_LY_R]<=143){
-				lcd_change_mode(2); cpu_exec(83);
-				lcd_change_mode(3); cpu_exec(175);
+				lcd_change_mode(2); cpu_exec(90/*83*/);
+				lcd_change_mode(3); cpu_exec(180/*175*/);
 
 				if(INTERNAL_IO[IO_LCDC_R]&0x1)
 					lcd_draw_background_oneline(bitmap);
-				else
-					lcd_clear(bitmap);
 
 				if(INTERNAL_IO[IO_LCDC_R]&0x20)
 					lcd_draw_window_oneline(bitmap);
 				if(INTERNAL_IO[IO_LCDC_R]&0x2)
 					lcd_draw_sprite_oneline(bitmap);
 
-				INC_LY;
-				lcd_change_mode(0); cpu_exec(207);
-			}
 
+				lcd_change_mode(0); cpu_exec(220/*207*/);
+				INC_LY;
+			}
 			SDL_Texture *texture = SDL_CreateTextureFromSurface(window_renderer, bitmap_surface);
 			SDL_RenderCopy(window_renderer, texture, NULL, NULL);
 			SDL_DestroyTexture(texture);
 
-			INC_LY;
 			lcd_change_mode(LCDMODE_VBLANK);
 		}else{
-			cpu_exec(70224);
+			cpu_exec(71000/*70224*/);
 		}
 
 		SDL_RenderPresent(window_renderer);
 		frame_count++;
 
 		if(INTERNAL_IO[IO_LCDC_R]&0x80){
-			while(INTERNAL_IO[IO_LY_R]<152){
-				cpu_exec(510);
+			while(INTERNAL_IO[IO_LY_R]<=153){
+				cpu_exec(470/*456*/);
 				INC_LY;
 			}
 		}

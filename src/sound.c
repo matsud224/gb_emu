@@ -463,7 +463,7 @@ static void callback(void *unused, Uint8 *stream, int len) {
 	Sint16 *frames = (Sint16 *) stream;
 	int framesize = len / 2;
 	for (int i = 0; i < framesize; i+=2) {
-		int ch1_val=ch1_wave()*64, ch2_val=ch2_wave()*64, ch3_val=ch3_wave()*64, ch4_val=ch4_wave()*64;
+		int ch1_val=ch1_wave()*32, ch2_val=ch2_wave()*32, ch3_val=ch3_wave()*32, ch4_val=ch4_wave()*32;
         frames[i] = master.all_enabled*(ch1.left_enabled*ch1_val+ch2.left_enabled*ch2_val+ch3.left_enabled*ch3_val+ch4.left_enabled*ch4_val);
         frames[i] = frames[i] + (frames[i] * master.left_enabled);
         frames[i+1] = master.all_enabled*(ch1.right_enabled*ch1_val+ch2.right_enabled*ch2_val+ch3.right_enabled*ch3_val+ch4.right_enabled*ch4_val);
