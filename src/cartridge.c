@@ -3,14 +3,18 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
+static void update_mapping(struct cartridge *cart);
 
 struct cartridge {
 	uint8_t *rom;
 	uint8_t *ram;
+	time_t ram_time;
 	struct gb_carthdr header;
 	uint8_t ram_enabled;
-	uint16_t banknum;
+	uint16_t rom_banknum;
+	uint8_t ram_banknum;
 	uint8_t mbc1_mode;
 	uint8_t *rom0;
 	uint8_t *romn;
@@ -28,8 +32,6 @@ struct cartridge *cart_init(uint8_t *rom) {
 	struct cartridge *cart = malloc(sizeof(struct cartridge));
 	cart->rom = rom;
 	cart->ram_enabled = 1;
-	cart->banknum = 0;
-	cart->mbc1_mode = 0;
 	memcpy(&(cart->header), rom+0x100, sizeof(struct gb_carthdr));
 
 	if(cart->header.cgbflag == CGBFLAG_CGBONLY) {
@@ -52,9 +54,25 @@ struct cartridge *cart_init(uint8_t *rom) {
 		cart->ramn = NULL;
 		break;
 	case CARTTYPE_MBC1:
-		cart->romn = cart->rom + 0x4000;
-		cart->ramn = NULL;
+	case CARTTYPE_MBC1_RAM:
+	case CARTTYPE_MBC1_RAM_BATT:
+		cart->rom_banknum = 0x1;
 		cart->mbc1_mode = 0;
+		break;
+	case CARTTYPE_MBC2:
+	case CARTTYPE_MBC2_BATT:
+		cart->rom_banknum = 0x1;
+		break;
+	case CARTTYPE_MBC3_TIM_BATT:
+	case CARTTYPE_MBC3_TIM_RAM_BATT:
+	case CARTTYPE_MBC3:
+	case CARTTYPE_MBC3_RAM:
+	case CARTTYPE_MBC3_RAM_BATT:
+	case CARTTYPE_MBC5:
+	case CARTTYPE_MBC5_RAM:
+	case CARTTYPE_MBC5_RAM_BATT:
+		cart->rom_banknum = 0x1;
+		cart->ram_banknum = 0x0;
 		break;
 	default:
 		printf("cart_init: catridge type 0x%x is not supported.\n", cart->header.carttype);
@@ -62,11 +80,15 @@ struct cartridge *cart_init(uint8_t *rom) {
 		return NULL;
 	}
 
+	update_mapping(cart);
+
 	return cart;
 }
 
-void cart_setram(struct cartridge *cart, uint8_t *ram) {
+void cart_setram(struct cartridge *cart, uint8_t *ram, time_t t) {
 	cart->ram = ram;
+	cart->ram_time = t;
+	update_mapping(cart);
 }
 
 struct gb_carthdr *cart_header(struct cartridge *cart) {
@@ -74,21 +96,66 @@ struct gb_carthdr *cart_header(struct cartridge *cart) {
 };
 
 static void update_mapping(struct cartridge *cart) {
-	switch(cart->header.carttype){
+	//ROM
+	switch(cart->header.carttype) {
 	case CARTTYPE_MBC1:
+	case CARTTYPE_MBC1_RAM:
+	case CARTTYPE_MBC1_RAM_BATT:
 		if(cart->mbc1_mode==0){
 			//ROM Banking Mode
-			uint8_t romnum = cart->banknum&0x7f;
+			uint8_t romnum = cart->rom_banknum&0x7f;
 			if(romnum==0x0 || romnum==0x20 || romnum==0x40 || romnum==0x60)
 				romnum++;
             cart->romn = cart->rom + (0x4000*romnum);
 		}else{
 			//RAM Banking Mode
-			uint8_t romnum = cart->banknum&0x1f;
+			uint8_t romnum = cart->rom_banknum&0x1f;
 			if(romnum==0x0)
 				romnum++;
 			cart->romn = cart->rom + (0x4000*romnum);
 		}
+		break;
+	case CARTTYPE_MBC2:
+	case CARTTYPE_MBC2_BATT:
+	case CARTTYPE_MBC3_TIM_BATT:
+	case CARTTYPE_MBC3_TIM_RAM_BATT:
+	case CARTTYPE_MBC3:
+	case CARTTYPE_MBC3_RAM:
+	case CARTTYPE_MBC3_RAM_BATT:
+		if(cart->rom_banknum==0x0)
+			cart->rom_banknum++;
+		cart->romn = cart->rom + (0x4000*cart->rom_banknum);
+		break;
+	case CARTTYPE_MBC5:
+	case CARTTYPE_MBC5_RAM:
+	case CARTTYPE_MBC5_RAM_BATT:
+		cart->romn = cart->rom + (0x4000*cart->rom_banknum);
+		break;
+	}
+
+	//RAM
+	switch(cart->header.carttype) {
+	case CARTTYPE_MBC1_RAM:
+	case CARTTYPE_MBC1_RAM_BATT:
+		if(cart->mbc1_mode==1){
+			//RAM Banking Mode
+			uint8_t ramnum = cart->rom_banknum>>5;
+			cart->ramn = cart->ram + (0x2000*ramnum);
+		}else{
+			cart->ramn = cart->ram;
+		}
+		break;
+	case CARTTYPE_MBC3_TIM_RAM_BATT:
+	case CARTTYPE_MBC3_RAM:
+	case CARTTYPE_MBC3_RAM_BATT:
+		if(cart->ram_banknum<=3)
+			cart->ramn = cart->ram + (0x2000*cart->ram_banknum);
+		else
+			cart->ramn = NULL;
+		break;
+	case CARTTYPE_MBC5_RAM:
+	case CARTTYPE_MBC5_RAM_BATT:
+		cart->ramn = cart->ram + (0x2000*cart->ram_banknum);
 		break;
 	}
 }
@@ -102,7 +169,7 @@ void cart_rom0_write8(struct cartridge *cart, uint16_t dst, uint8_t value) {
 			cart->ram_enabled = (value==0xa);
 		}else{
 			//Bank Numberの下位5ビット
-			cart->banknum = (cart->banknum&0x60) | (value&0x1f);
+			cart->rom_banknum = (cart->rom_banknum&0x60) | (value&0x1f);
 			update_mapping(cart);
 		}
 		break;
@@ -112,7 +179,7 @@ void cart_rom0_write8(struct cartridge *cart, uint16_t dst, uint8_t value) {
 			if(!(dst>>8&0x1)) cart->ram_enabled = (value==0xa);
 		}else{
 			if(dst>>8&0x1){
-				cart->banknum = value&0xf;
+				cart->rom_banknum = value&0xf;
 				update_mapping(cart);
 			}
 		}
@@ -125,7 +192,7 @@ void cart_rom0_write8(struct cartridge *cart, uint16_t dst, uint8_t value) {
 		if(dst <= 0x1fff){
 			cart->ram_enabled = (value==0xa);
 		}else{
-			cart->banknum = value&0x7f;
+			cart->rom_banknum = value&0x7f;
 			update_mapping(cart);
 		}
 		break;
@@ -136,9 +203,9 @@ void cart_rom0_write8(struct cartridge *cart, uint16_t dst, uint8_t value) {
 			cart->ram_enabled = (value==0xa);
 		}else{
 			if(dst<=0x2fff)
-				cart->banknum = (cart->banknum&0x100) | value;
+				cart->rom_banknum = (cart->rom_banknum&0x100) | value;
 			else
-				cart->banknum = (cart->banknum&0xff) | (value<<8);
+				cart->rom_banknum = (cart->rom_banknum&0xff) | (value<<8);
 			update_mapping(cart);
 		}
 		break;
@@ -153,25 +220,35 @@ void cart_romn_write8(struct cartridge *cart, uint16_t dst, uint8_t value) {
 	case CARTTYPE_MBC1:
 	case CARTTYPE_MBC1_RAM:
 	case CARTTYPE_MBC1_RAM_BATT:
-		if(dst >= 0x6000){
-			cart->mbc1_mode = value&0x1;
-			update_mapping(cart);
-		}else if(dst >= 0x4000){
+		if(dst <= 0x5fff){
 			//Bank Numberの上位2ビット
-			cart->banknum = (cart->banknum&0x1f) | (value<<5);
+			cart->rom_banknum = (cart->rom_banknum&0x1f) | (value<<5);
+			update_mapping(cart);
+		}else{
+			cart->mbc1_mode = value&0x1;
 			update_mapping(cart);
 		}
 		break;
-	case CARTTYPE_MBC2:
-	case CARTTYPE_MBC2_BATT:
 	case CARTTYPE_MBC3_TIM_BATT:
 	case CARTTYPE_MBC3_TIM_RAM_BATT:
 	case CARTTYPE_MBC3:
 	case CARTTYPE_MBC3_RAM:
 	case CARTTYPE_MBC3_RAM_BATT:
+		if(dst <= 0x5fff){
+			cart->ram_banknum = value&0xf;
+			update_mapping(cart);
+		}else{
+			//latch clock data
+		}
+		break;
 	case CARTTYPE_MBC5:
 	case CARTTYPE_MBC5_RAM:
 	case CARTTYPE_MBC5_RAM_BATT:
+		if(dst <= 0x5fff){
+			//Bank Numberの上位2ビット
+			cart->ram_banknum = value&0xf;
+			update_mapping(cart);
+		}
 		break;
 	}
 }
@@ -180,33 +257,54 @@ void cart_ramn_write8(struct cartridge *cart, uint16_t dst, uint8_t value) {
 	if(!cart->ram_enabled)
 		return;
 
-	switch(cart->header.carttype) {
+	switch(cart->header.carttype){
+	case CARTTYPE_MBC2:
+	case CARTTYPE_MBC2_BATT:
+		cart->ramn[dst - V_CART_RAMN] = value&0xf;
+		break;
+	case CARTTYPE_MBC3_TIM_BATT:
+	case CARTTYPE_MBC3_TIM_RAM_BATT:
+		if(!(cart->ram_banknum<=3))
+			break;
+	default:
+		cart->ramn[dst - V_CART_RAMN] = value;
+		break;
 	}
 }
 
 uint8_t cart_rom0_read8(struct cartridge *cart, uint16_t src) {
-	switch(cart->header.carttype) {
-	case CARTTYPE_ROMONLY:
-	case CARTTYPE_MBC1:
-		return cart->rom0[src - V_CART_ROM0];
-	}
-
-	return 0;
+	return cart->rom0[src - V_CART_ROM0];
 }
 
 uint8_t cart_romn_read8(struct cartridge *cart, uint16_t src) {
-	switch(cart->header.carttype) {
-	case CARTTYPE_ROMONLY:
-	case CARTTYPE_MBC1:
-		return cart->romn[src - V_CART_ROMN];
-	}
-
-	return 0;
+	return cart->romn[src - V_CART_ROMN];
 }
 
 uint8_t cart_ramn_read8(struct cartridge *cart, uint16_t src) {
-	switch(cart->header.carttype) {
+	switch(cart->header.carttype){
+	case CARTTYPE_MBC3_TIM_BATT:
+	case CARTTYPE_MBC3_TIM_RAM_BATT:
+		{
+			time_t t = time(NULL);
+			struct tm *local = localtime(&t);
+			int daydiff = (cart->ram_time-t)/60*60*24;
+			switch(cart->ram_banknum){
+			case 0x8:
+				return local->tm_sec;
+			case 0x9:
+				return local->tm_min;
+			case 0xa:
+				return local->tm_hour;
+			case 0xb:
+				return daydiff>=0 ? daydiff&0xff : 0;
+			case 0xc:
+				if(daydiff<0)
+					return 0;
+				else
+					return ((daydiff&0x100)!=0) | (((daydiff&~0x1ff)!=0)<<7);
+			}
+		}
+	default:
+		return cart->ramn[src - V_CART_RAMN];
 	}
-
-	return 0;
 }

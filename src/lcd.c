@@ -24,10 +24,6 @@ uint8_t lcd_get_mode() {
 	return LCDMODE;
 }
 
-uint8_t lcd_enabled() {
-	return INTERNAL_IO[IO_LCDC_R]&0x80;
-}
-
 void lcd_change_mode(int mode) {
 	LCDMODE = mode;
 	switch(mode){
@@ -55,7 +51,6 @@ void lcd_init(SDL_Surface *surface) {
 }
 
 void lcd_clear(Uint32 buf[]) {
-	uint8_t y = INTERNAL_IO[IO_LY_R];
 	for(int i=0; i<160*144; i++)
 		buf[i] = ABSCOLOR[0];
 }

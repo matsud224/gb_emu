@@ -795,6 +795,7 @@ void cpu_exec(int cycles) {
 		case 0xFE: /* CP # Z1HC */  		BINOPA_CP(OPERAND8); REG_PC+=2; CLOCK(8); continue;
 		case 0xFF: /* RST 38H ---- */		RST(0x38); CLOCK(16); continue;
 		}
+		printf("unknown opcode 0x%X(pc=0x%X)\n", memory_read8(REG_PC), REG_PC);
 	}
 }
 

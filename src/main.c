@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "cpu.h"
 #include "cartridge.h"
@@ -54,7 +55,7 @@ static uint8_t *open_rom(char* filename) {
 	return data;
 }
 
-static uint8_t *open_ram(char* filename, size_t size) {
+static uint8_t *open_ram(char* filename, unsigned int size, time_t *t) {
 	int fd;
 	struct stat sbuf;
 	fd = open(filename, O_RDWR);
@@ -64,10 +65,11 @@ static uint8_t *open_ram(char* filename, size_t size) {
 		if(fd == -1)
 			return NULL;
 		char c = '\0';
-		for(int i=0; i<size; i++)
+		for(unsigned int i=0; i<size; i++)
 			write(fd, &c, 1);
 		lseek(fd, 0, SEEK_SET);
 		puts("new save data created");
+		*t = time(NULL);
 	}else{
 		if(fstat(fd, &sbuf) == -1){
 			close(fd);
@@ -78,6 +80,7 @@ static uint8_t *open_ram(char* filename, size_t size) {
 			close(fd);
 			return NULL;
 		}
+		*t = sbuf.st_mtim.tv_sec;
 	}
 
 	uint8_t *data = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
@@ -152,12 +155,22 @@ int main(int argc, char *argv[]) {
 		 hdr->title, hdr->cgbflag, hdr->carttype, hdr->romsize, hdr->ramsize, ramsize_table[hdr->ramsize]);
 
 	if(hdr->ramsize!=0){
-		uint8_t *ram = open_ram(argv[2], ramsize_table[hdr->ramsize]);
+		char buf[256];
+		char *fname;
+		if(argc<=2){
+			strncpy(buf, argv[1], 256);
+			strncat(buf, ".save", 256-strlen(buf));
+			fname=buf;
+		}else{
+			fname=argv[2];
+		}
+		time_t t;
+		uint8_t *ram = open_ram(fname, ramsize_table[hdr->ramsize], &t);
 		if(ram == NULL){
 			printf("open_ram failed\n");
 			return -1;
 		}
-		cart_setram(cart, ram);
+		cart_setram(cart, ram, t);
 	}
 
 	if(memory_init(cart)){

@@ -41,7 +41,6 @@ struct wave_channel {
 	int status;
 	unsigned int step;
 	int remaining_time;
-	int wave_steps;
 	int restart;
 	int ms_countdown;
 	int wave_index;
