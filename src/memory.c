@@ -104,6 +104,35 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 		case IO_OBP1_R: INTERNAL_IO[IO_OBP1_R]=value; break;
 		case IO_WY_R: INTERNAL_IO[IO_WY_R]=value; break;
 		case IO_WX_R: INTERNAL_IO[IO_WX_R]=value; break;
+		case IO_NR10_R:
+		case IO_NR11_R:
+		case IO_NR12_R:
+		case IO_NR13_R:
+		case IO_NR14_R:
+			sound_ch1_writereg(dst-V_INTERNAL_IO, value); break;
+		case IO_NR21_R:
+		case IO_NR22_R:
+		case IO_NR23_R:
+		case IO_NR24_R:
+			sound_ch2_writereg(dst-V_INTERNAL_IO, value); break;
+		case IO_NR30_R:
+		case IO_NR31_R:
+		case IO_NR32_R:
+		case IO_NR33_R:
+		case IO_NR34_R:
+			sound_ch3_writereg(dst-V_INTERNAL_IO, value); break;
+		case IO_NR41_R:
+		case IO_NR42_R:
+		case IO_NR43_R:
+		case IO_NR44_R:
+			sound_ch4_writereg(dst-V_INTERNAL_IO, value); break;
+		case IO_NR50_R:
+		case IO_NR51_R:
+		case IO_NR52_R:
+			sound_master_writereg(dst-V_INTERNAL_IO, value); break;
+		default:
+			//wave ramのために
+			INTERNAL_IO[dst-V_INTERNAL_IO]=value; break;
 		}
 	}else if(dst < V_INTERNAL_INTMASK){
 		//INTERNAL_STACK
@@ -170,6 +199,35 @@ uint8_t memory_read8(uint16_t src) {
 		case IO_OBP1_R: return INTERNAL_IO[IO_OBP1_R];
 		case IO_WY_R: return INTERNAL_IO[IO_WY_R];
 		case IO_WX_R: return INTERNAL_IO[IO_WX_R];
+		case IO_NR10_R:
+		case IO_NR11_R:
+		case IO_NR12_R:
+		case IO_NR13_R:
+		case IO_NR14_R:
+			return sound_ch1_readreg(src-V_INTERNAL_IO);
+		case IO_NR21_R:
+		case IO_NR22_R:
+		case IO_NR23_R:
+		case IO_NR24_R:
+			return sound_ch2_readreg(src-V_INTERNAL_IO);
+		case IO_NR30_R:
+		case IO_NR31_R:
+		case IO_NR32_R:
+		case IO_NR33_R:
+		case IO_NR34_R:
+			return sound_ch3_readreg(src-V_INTERNAL_IO);
+		case IO_NR41_R:
+		case IO_NR42_R:
+		case IO_NR43_R:
+		case IO_NR44_R:
+			return sound_ch4_readreg(src-V_INTERNAL_IO);
+		case IO_NR50_R:
+		case IO_NR51_R:
+		case IO_NR52_R:
+			return sound_master_readreg(src-V_INTERNAL_IO);
+		default:
+			//wave ramのために
+			return INTERNAL_IO[src-V_INTERNAL_IO];
 		}
 	}else if(src < V_INTERNAL_INTMASK){
 		//INTERNAL_STACK

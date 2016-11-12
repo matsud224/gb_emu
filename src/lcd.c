@@ -128,7 +128,7 @@ void lcd_draw_sprite_oneline(Uint32 buf[]) {
         int sp_y=attr[0]-16, sp_x=attr[1]-8;
         uint8_t flags=attr[3];
         uint16_t palette_addr = (flags&0x10)?IO_OBP1_R:IO_OBP0_R;
-		if(!(sp_y<=scr_y && scr_y<sp_y+(lcdc&0x4?16:8)) || sp_x==-8 || sp_x>=160)
+		if(!(sp_y<=scr_y && scr_y<sp_y+((lcdc&0x4)?16:8)) || sp_x==-8 || sp_x>=160)
 			continue;
 
 		if(lcdc&0x4){

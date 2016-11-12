@@ -12,6 +12,7 @@
 #include "memory.h"
 #include "lcd.h"
 #include "joypad.h"
+#include "sound.h"
 
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_ttf.h"
@@ -135,6 +136,8 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 
+	sound_init();
+
 	TIMER_START(fps_timer);
 
 	int quit = 0;
@@ -185,9 +188,9 @@ int main(int argc, char *argv[]) {
 
 		if(quit) break;
 
-		static char wndtitle[32];
 		int avgfps=frame_count/(TIMER_GET(fps_timer)/1000+1);
 		if(frame_count%60==0){
+			static char wndtitle[32];
 			snprintf(wndtitle, 32, "%.16s  FPS = %d", hdr->title, avgfps);
 			SDL_SetWindowTitle(main_window, wndtitle);
 		}
