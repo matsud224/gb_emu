@@ -51,6 +51,9 @@ void memory_free() {
 }
 
 uint8_t memory_write8(uint16_t dst, uint8_t value) {
+	//if(dst==0xc1ca)
+		//printf("0xc1ca = %d\n", value);
+
 	if(dst < V_CART_ROMN){
 		//CART_ROM0
 		cart_rom0_write8(cart, dst, value);

@@ -1,19 +1,17 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <inttypes.h>
 #include "cpu.h"
 #include "memory.h"
 
 //#define SHOW_DISAS
 
-#ifndef SHOW_DISAS
-    #define DISAS_PRINT( fmt, ... ) ((void)0)
-#else
-    #define DISAS_PRINT( fmt, ... ) \
-        fprintf( stdout, \
-                  fmt "\n", \
-                  ##__VA_ARGS__ \
-        )
-#endif
+
+#define DISAS_PRINT( fmt, ... ) \
+	fprintf( stdout, \
+			  fmt "\n", \
+			  ##__VA_ARGS__ \
+	)
 
 #define BIT7_6(v) (((v)>>6)&0x3)
 #define BIT5_3(v) (((v)>>3)&0x7)
@@ -224,6 +222,9 @@ void cpu_request_interrupt(uint8_t type) {
 	INTERNAL_IO[IO_IF_R] |= type;
 }
 
+
+int logging_enabled = 0;
+
 void cpu_exec(int cycles) {
 	uint32_t cr, tmp, tmp2;
 
@@ -239,7 +240,7 @@ void cpu_exec(int cycles) {
 				FLG_IME=0;
 				INTERNAL_IO[IO_IF_R] &= (~cause);
 				switch(cause){
-				case INT_VBLANK: CALL_ADDR(0x40, REG_PC); break;
+				case INT_VBLANK: /*printf("[VBRANK] BC=%hX DE=%hX\n", REG_BC, REG_DE);*/ CALL_ADDR(0x40, REG_PC); break;
 				case INT_LCDSTAT: CALL_ADDR(0x48, REG_PC); break;
 				case INT_TIMER: CALL_ADDR(0x50, REG_PC); break;
 				case INT_SERIAL: CALL_ADDR(0x58, REG_PC); break;
@@ -260,6 +261,12 @@ void cpu_exec(int cycles) {
 					REG_PC, REG_SP, REG_A, REG_BC, REG_DE, REG_HL, FLG_IME, memory_read8(REG_PC), TIMA);
 			cpu_disas_one(REG_PC);
 		#endif // SHOW_DISAS
+
+		if(logging_enabled){
+			fprintf(stdout, "PC=%4X SP=%4X A=%2X BC=%2X DE=%2X HL=%4X IME=%d OP=%2X  ",
+						REG_PC, REG_SP, REG_A, REG_BC, REG_DE, REG_HL, FLG_IME, memory_read8(REG_PC));
+			cpu_disas_one(REG_PC);
+		}
 
 		switch(memory_read8(REG_PC)){
 		case 0x00: /* NOP - ---- */			REG_PC+=1;  CLOCK(4); continue;
@@ -796,6 +803,7 @@ void cpu_exec(int cycles) {
 		case 0xFF: /* RST 38H ---- */		RST(0x38); CLOCK(16); continue;
 		}
 		printf("unknown opcode 0x%X(pc=0x%X)\n", memory_read8(REG_PC), REG_PC);
+		exit(-1);
 	}
 }
 

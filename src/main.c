@@ -131,6 +131,8 @@ static int sdl_init() {
 #define INC_LY ((++INTERNAL_IO[IO_LY_R]==INTERNAL_IO[IO_LYC_R] && INTERNAL_IO[IO_STAT_R]&0x40)?cpu_request_interrupt(INT_LCDSTAT):0)
 #define RST_LY (((INTERNAL_IO[IO_LY_R]=0)==INTERNAL_IO[IO_LYC_R] && INTERNAL_IO[IO_STAT_R]&0x40)?cpu_request_interrupt(INT_LCDSTAT):0)
 
+extern int logging_enabled;
+
 int main(int argc, char *argv[]) {
 	if(argc != 2 && argc != 3){
 		printf("too few arguments\n");
@@ -225,6 +227,9 @@ int main(int argc, char *argv[]) {
 				case SDLK_s:
 					SDL_SaveBMP(bitmap_surface, "screenshot.bmp");
 					break;
+				case SDLK_l:
+					logging_enabled = 1;
+					break;
 				default:
 					break;
 				}
@@ -262,7 +267,7 @@ int main(int argc, char *argv[]) {
 			RST_LY;
 			lcd_clear(bitmap);
 			while(INTERNAL_IO[IO_LY_R]<=143){
-				lcd_change_mode(2); cpu_exec(90/*83*/);
+				lcd_change_mode(2); cpu_exec(100/*83*/);
 				lcd_change_mode(3); cpu_exec(180/*175*/);
 
 				if(INTERNAL_IO[IO_LCDC_R]&0x1)
