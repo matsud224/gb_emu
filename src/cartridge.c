@@ -290,6 +290,9 @@ void cart_ramn_write8(struct cartridge *cart, uint16_t dst, uint8_t value) {
 	if(!cart->ram_enabled)
 		return;
 
+	if(cart->header.ramsize==0)
+		return;
+
 	switch(cart->header.carttype){
 	case CARTTYPE_MBC2:
 	case CARTTYPE_MBC2_BATT:

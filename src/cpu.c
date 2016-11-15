@@ -154,13 +154,39 @@ static const int clock_bit_table[4] = {10, 4, 6, 8};
 		cycles-=(n); \
 		if(CPUMODE == CPU_MODE_STOP) \
 			break; \
-		uint32_t div_old=DIV; \
 		uint8_t tac = INTERNAL_IO[IO_TAC_R]; \
 		DIV+=(n); \
 		if(tac&0x4){ \
-			if((DIV^div_old)&(1<<clock_bit_table[tac&0x3])) \
+			timer_remaining -= (n); \
+			while(timer_remaining<=0){ \
 				TIMA++; \
-			if(TIMA&0x100){ \
+				timer_remaining += timer_interval; \
+			} \
+			while(TIMA&0x100){ \
+				TIMA=INTERNAL_IO[IO_TMA_R]+(TIMA&0xff); \
+				cpu_request_interrupt(INT_TIMER); \
+			} \
+		} \
+	}while(0)
+
+#define CLOCK_DIV(n) do{ \
+		if(CPUMODE == CPU_MODE_STOP) \
+			break; \
+		DIV+=(n); \
+	}while(0)
+
+#define CLOCK_TIM(n) do{ \
+		cycles-=(n); \
+		if(CPUMODE == CPU_MODE_STOP) \
+			break; \
+		uint8_t tac = INTERNAL_IO[IO_TAC_R]; \
+		if(tac&0x4){ \
+			timer_remaining -= (n); \
+			while(timer_remaining<=0){ \
+				TIMA++; \
+				timer_remaining += timer_interval; \
+			} \
+			while(TIMA&0x100){ \
 				TIMA=INTERNAL_IO[IO_TMA_R]+(TIMA&0xff); \
 				cpu_request_interrupt(INT_TIMER); \
 			} \
@@ -218,14 +244,17 @@ void startup() {
 	REG_PC=0x100;
 }
 
+static uint32_t before_div = 0;
 void cpu_request_interrupt(uint8_t type) {
 	INTERNAL_IO[IO_IF_R] |= type;
+
 }
 
 
 int logging_enabled = 0;
 
-void cpu_exec(int cycles) {
+//超過サイクル数を返す
+int cpu_exec(int cycles) {
 	uint32_t cr, tmp, tmp2;
 
 	while(cycles>0){
@@ -239,12 +268,17 @@ void cpu_exec(int cycles) {
 				CPUMODE = CPU_MODE_NORMAL;
 				FLG_IME=0;
 				INTERNAL_IO[IO_IF_R] &= (~cause);
+
 				switch(cause){
-				case INT_VBLANK: /*printf("[VBRANK] BC=%hX DE=%hX\n", REG_BC, REG_DE);*/ CALL_ADDR(0x40, REG_PC); break;
-				case INT_LCDSTAT: CALL_ADDR(0x48, REG_PC); break;
-				case INT_TIMER: CALL_ADDR(0x50, REG_PC); break;
-				case INT_SERIAL: CALL_ADDR(0x58, REG_PC); break;
-				case INT_JOYPAD: CALL_ADDR(0x60, REG_PC); break;
+				case INT_VBLANK: printf("[VBRANK  %d]\n", DIV-before_div); before_div=DIV; break;
+				}
+
+				switch(cause){
+				case INT_VBLANK: CALL_ADDR(0x40, REG_PC); CLOCK(16); break;
+				case INT_LCDSTAT: CALL_ADDR(0x48, REG_PC); CLOCK(16); break;
+				case INT_TIMER:  CALL_ADDR(0x50, REG_PC); CLOCK(16); break;
+				case INT_SERIAL: CALL_ADDR(0x58, REG_PC); CLOCK(16); break;
+				case INT_JOYPAD: CALL_ADDR(0x60, REG_PC); CLOCK(16); break;
 				}
 			}
 		}
@@ -257,13 +291,13 @@ void cpu_exec(int cycles) {
 		}
 
 		#ifdef SHOW_DISAS
-			fprintf(stdout, "PC=%4X SP=%4X A=%2X BC=%2X DE=%2X HL=%4X IME=%d OP=%2X TIMA=%X  ",
-					REG_PC, REG_SP, REG_A, REG_BC, REG_DE, REG_HL, FLG_IME, memory_read8(REG_PC), TIMA);
+			fprintf(stdout, "PC=%04X SP=%04X A=%02X BC=%04X DE=%04X HL=%04X IME=%d OP=%02X TIMA=%X DIV=%X idiv=%X ",
+					REG_PC, REG_SP, REG_A, REG_BC, REG_DE, REG_HL, FLG_IME, memory_read8(REG_PC), TIMA, memory_read8(IO_DIV), DIV);
 			cpu_disas_one(REG_PC);
 		#endif // SHOW_DISAS
 
 		if(logging_enabled){
-			fprintf(stdout, "PC=%4X SP=%4X A=%2X BC=%2X DE=%2X HL=%4X IME=%d OP=%2X  ",
+			fprintf(stdout, "PC=%04X SP=%04X A=%02X BC=%04X DE=%04X HL=%04X IME=%d OP=%02X  ",
 						REG_PC, REG_SP, REG_A, REG_BC, REG_DE, REG_HL, FLG_IME, memory_read8(REG_PC));
 			cpu_disas_one(REG_PC);
 		}
@@ -288,6 +322,7 @@ void cpu_exec(int cycles) {
 		case 0x10: /* STOP - ---- */
 			//TODO: LCDを白くする
 			CPUMODE = CPU_MODE_STOP;
+			CLOCK(4);
 			REG_PC+=2;
 			continue;
 		case 0x11: /* LD DE,nn ---- */  	REG_DE=OPERAND16; REG_PC+=3; CLOCK(12); continue;
@@ -415,6 +450,7 @@ void cpu_exec(int cycles) {
 		case 0x75: /* LD (HL),L ---- */ 	memory_write8(REG_HL, REG_L); REG_PC+=1; CLOCK(8); continue;
 		case 0x76: /* HALT - ---- */
 			CPUMODE = CPU_MODE_HALT;
+			CLOCK(4);
 			REG_PC+=1;
 			continue;
 		case 0x77: /* LD (HL),A ---- */ 	memory_write8(REG_HL, REG_A); REG_PC+=1; CLOCK(8); continue;
@@ -788,7 +824,7 @@ void cpu_exec(int cycles) {
 		case 0xEA: /* LD (nn),A ---- */  	memory_write8(OPERAND16, REG_A); REG_PC+=3; CLOCK(16); continue;
 		case 0xEE: /* XOR * Z000 */  		BINOPA_LOGIC(^, OPERAND8, 0, 0);REG_PC+=2; CLOCK(8); continue;
 		case 0xEF: /* RST 28H ---- */  		RST(0x28); CLOCK(16); continue;
-		case 0xF0: /* LD A,($FF00+n) ---- */REG_A=memory_read8(0xff00+OPERAND8); REG_PC+=2; CLOCK(12); continue;
+		case 0xF0: /* LD A,($FF00+n) ---- */REG_A=memory_read8(0xff00+OPERAND8); CLOCK(12); REG_PC+=2; continue;
 		case 0xF1: /* POP AF ---- */  		POP_AF; REG_PC+=1; CLOCK(12); continue;
 		case 0xF2: /* LD A,($FF00+C) ---- */REG_A=memory_read8(0xff00+REG_C); REG_PC+=1; CLOCK(8); continue;
 		case 0xF3: /* DI - ---- */  		FLG_IME=0; REG_PC+=1; CLOCK(4); continue;
@@ -805,6 +841,8 @@ void cpu_exec(int cycles) {
 		printf("unknown opcode 0x%X(pc=0x%X)\n", memory_read8(REG_PC), REG_PC);
 		exit(-1);
 	}
+
+	return -cycles;
 }
 
 

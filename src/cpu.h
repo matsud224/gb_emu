@@ -2,7 +2,7 @@
 
 void startup(void);
 void cpu_request_interrupt(uint8_t type);
-void cpu_exec(int cycles);
+int cpu_exec(int cycles);
 int cpu_disas_one(uint16_t pc);
 
 #define INT_VBLANK 0x1

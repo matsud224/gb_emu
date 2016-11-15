@@ -23,6 +23,7 @@ static uint8_t*		INTERNAL_STACK = NULL;
 
 uint32_t DIV;
 uint16_t TIMA;
+int timer_remaining, timer_interval;
 
 static struct cartridge *cart;
 
@@ -51,8 +52,8 @@ void memory_free() {
 }
 
 uint8_t memory_write8(uint16_t dst, uint8_t value) {
-	//if(dst==0xc1ca)
-		//printf("0xc1ca = %d\n", value);
+	if(dst==0xc1ca)
+		printf("0xc1ca = %d\n", value);
 
 	if(dst < V_CART_ROMN){
 		//CART_ROM0
@@ -82,10 +83,20 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 		//INTERNAL_IO
 		switch(dst-V_INTERNAL_IO){
 		case IO_P1_R: INTERNAL_IO[IO_P1_R] = value; break;
-		case IO_DIV_R: DIV = 0; break;
+		case IO_DIV_R: /*DIV = 0;*/ DIV=DIV&0xff; break;
 		case IO_TIMA_R: TIMA=value; break;
 		case IO_TMA_R: INTERNAL_IO[IO_TMA_R]=value; break;
-		case IO_TAC_R: INTERNAL_IO[IO_TAC_R]=value;	break;
+		case IO_TAC_R:
+			INTERNAL_IO[IO_TAC_R]=value;
+			TIMA=0;
+			switch(value&0x3){
+			case 0: timer_interval = 1024; break;
+			case 1: timer_interval = 16; break;
+			case 2: timer_interval = 64; break;
+			case 3: timer_interval = 256; break;
+			}
+			timer_remaining = timer_interval;
+			break;
 		case IO_IF_R: INTERNAL_IO[IO_IF_R]=value; break;
 		case IO_LCDC_R: INTERNAL_IO[IO_LCDC_R]=value; break;
 		case IO_STAT_R: INTERNAL_IO[IO_STAT_R]=value; break;

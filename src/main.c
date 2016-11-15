@@ -201,7 +201,12 @@ int main(int argc, char *argv[]) {
 
 	TIMER_START(fps_timer);
 
+	while(!(INTERNAL_IO[IO_LCDC_R]&0x80)){
+		cpu_exec(4);
+	}
+
 	int quit = 0;
+	int over=0;
 	while(!quit){
 		while(SDL_PollEvent(&e)!=0){
 			switch(e.type){
@@ -267,8 +272,8 @@ int main(int argc, char *argv[]) {
 			RST_LY;
 			lcd_clear(bitmap);
 			while(INTERNAL_IO[IO_LY_R]<=143){
-				lcd_change_mode(2); cpu_exec(100/*83*/);
-				lcd_change_mode(3); cpu_exec(180/*175*/);
+				lcd_change_mode(2); over=cpu_exec(80-over);
+				lcd_change_mode(3); over=cpu_exec(172-over);
 
 				if(INTERNAL_IO[IO_LCDC_R]&0x1)
 					lcd_draw_background_oneline(bitmap);
@@ -279,7 +284,7 @@ int main(int argc, char *argv[]) {
 					lcd_draw_sprite_oneline(bitmap);
 
 
-				lcd_change_mode(0); cpu_exec(220/*207*/);
+				lcd_change_mode(0); over=cpu_exec(204-over);
 				INC_LY;
 			}
 			SDL_Texture *texture = SDL_CreateTextureFromSurface(window_renderer, bitmap_surface);
@@ -288,7 +293,7 @@ int main(int argc, char *argv[]) {
 
 			lcd_change_mode(LCDMODE_VBLANK);
 		}else{
-			cpu_exec(71000/*70224*/);
+			over=cpu_exec(70224-over);
 		}
 
 		SDL_RenderPresent(window_renderer);
@@ -296,7 +301,7 @@ int main(int argc, char *argv[]) {
 
 		if(INTERNAL_IO[IO_LCDC_R]&0x80){
 			while(INTERNAL_IO[IO_LY_R]<=153){
-				cpu_exec(470/*456*/);
+				over=cpu_exec(/*456*/456-over);
 				INC_LY;
 			}
 		}

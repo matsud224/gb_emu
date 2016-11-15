@@ -5,6 +5,8 @@
 
 extern uint32_t DIV;
 extern uint16_t TIMA;
+extern int timer_remaining;
+extern int timer_interval;
 
 extern uint8_t*		INTERNAL_VRAM;
 extern uint8_t*		INTERNAL_OAM;
