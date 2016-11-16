@@ -21,9 +21,6 @@
 #include "SDL2/SDL_keyboard.h"
 #include "SDL2/SDL_gamecontroller.h"
 
-#define handle_error(msg) \
-    do { perror(msg); exit(EXIT_FAILURE); } while (0)
-
 #define SCREEN_WIDTH (160<<3)
 #define SCREEN_HEIGHT (144<<3)
 

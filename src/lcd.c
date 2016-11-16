@@ -62,6 +62,7 @@ void lcd_draw_background_oneline(Uint32 buf[]) {
 	uint8_t *tiledata = INTERNAL_VRAM+(((lcdc&0x10)?0x8000:0x9000)-V_INTERNAL_VRAM);
 	uint8_t scx=INTERNAL_IO[IO_SCX_R], scy=INTERNAL_IO[IO_SCY_R];
 
+	int current_index = y*160;
 	int map_y=(y+scy)%256, tile_y=map_y>>3;
 	int in_y=map_y%8;
 	for(int x=0; x<160; x++){
@@ -74,7 +75,7 @@ void lcd_draw_background_oneline(Uint32 buf[]) {
 
 		int in_x=map_x%8;
 		uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
-		buf[y*160 + x] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
+		buf[current_index++] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
 	}
 }
 
@@ -86,12 +87,14 @@ void lcd_draw_window_oneline(Uint32 buf[]) {
 	uint8_t *tiledata = INTERNAL_VRAM+(((lcdc&0x10)?0x8000:0x9000)-V_INTERNAL_VRAM);
 	int wx=INTERNAL_IO[IO_WX_R]-7, wy=INTERNAL_IO[IO_WY_R];
 
+	int current_index = y*160;
 	int map_y=y-wy, in_y=map_y%8;
+	int tile_y=map_y>>3;
+	int map_x=-wx;
 	if(y<wy) return;
-	for(int x=0; x<160; x++){
+	for(int x=0; x<160; x++, map_x++){
 		if(x<wx) continue;
-		int map_x=x-wx;
-		int tile_y=map_y>>3, tile_x=map_x>>3;
+		int tile_x=map_x>>3;
 		uint8_t *thisdata; //タイルパターンデータの開始アドレス
 		if(lcdc&0x10)
 			thisdata = tiledata + ((uint8_t)tilemap[tile_y*32+tile_x]*16);
@@ -100,7 +103,7 @@ void lcd_draw_window_oneline(Uint32 buf[]) {
 
 		int in_x=map_x%8;
 		uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
-		buf[y*160 + x] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
+		buf[current_index++] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
 	}
 }
 

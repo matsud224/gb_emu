@@ -121,7 +121,6 @@ static void update_mapping(struct cartridge *cart) {
 				romnum++;
 			romnum %= get_romsize(cart->header.romsize)/0x4000;
             cart->romn = cart->rom + (0x4000*romnum);
-            //printf("MBC1: rom#%d\n", romnum);
 		}else{
 			//RAM Banking Mode
 			uint8_t romnum = cart->rom_banknum&0x1f;
@@ -129,7 +128,6 @@ static void update_mapping(struct cartridge *cart) {
 				romnum++;
 			romnum %= get_romsize(cart->header.romsize)/0x4000;
 			cart->romn = cart->rom + (0x4000*romnum);
-			//printf("MBC1: rom#%d\n", romnum);
 		}
 		break;
 	case CARTTYPE_MBC2:
@@ -142,19 +140,16 @@ static void update_mapping(struct cartridge *cart) {
 		if(cart->rom_banknum==0x0)
 			cart->rom_banknum++;
 		cart->romn = cart->rom + (0x4000*cart->rom_banknum);
-		//printf("MBC2,3: rom#%d\n", cart->rom_banknum);
 		break;
 	case CARTTYPE_MBC5:
 	case CARTTYPE_MBC5_RAM:
 	case CARTTYPE_MBC5_RAM_BATT:
 		cart->romn = cart->rom + (0x4000*cart->rom_banknum);
 		cart->rom_banknum &= 0x1f; //上位2bitをクリア（bgbではそうしてるみたい）
-		//printf("MBC5: rom#%d\n", cart->rom_banknum);
 		break;
 	}
 
 	if(cart->romn >= cart->rom+get_romsize(cart->header.romsize)){
-		//printf("warn: rom#0");
 		cart->romn = cart->rom;
 	}
 
@@ -166,10 +161,8 @@ static void update_mapping(struct cartridge *cart) {
 			//RAM Banking Mode
 			uint8_t ramnum = cart->rom_banknum>>5;
 			cart->ramn = cart->ram + (0x2000*ramnum);
-			//printf("MBC1: ram#%d\n", ramnum);
 		}else{
 			cart->ramn = cart->ram;
-			//printf("MBC1: ram#%d\n", 0);
 		}
 		break;
 	case CARTTYPE_MBC3_TIM_RAM_BATT:
@@ -179,12 +172,10 @@ static void update_mapping(struct cartridge *cart) {
 			cart->ramn = cart->ram + (0x2000*cart->ram_banknum);
 		else
 			cart->ramn = NULL;
-		//printf("MBC3: ram#%d\n", cart->ram_banknum);
 		break;
 	case CARTTYPE_MBC5_RAM:
 	case CARTTYPE_MBC5_RAM_BATT:
 		cart->ramn = cart->ram + (0x2000*cart->ram_banknum);
-		//printf("MBC5: ram#%d\n", cart->ram_banknum);
 		break;
 	}
 
@@ -199,7 +190,6 @@ void cart_rom0_write8(struct cartridge *cart, uint16_t dst, uint8_t value) {
 	case CARTTYPE_MBC1:
 	case CARTTYPE_MBC1_RAM:
 	case CARTTYPE_MBC1_RAM_BATT:
-		//printf("%X <- %X\n", dst, value);
 		if(dst <= 0x1fff){
 			cart->ram_enabled = (value==0xa);
 		}else{
@@ -254,7 +244,6 @@ void cart_romn_write8(struct cartridge *cart, uint16_t dst, uint8_t value) {
 	case CARTTYPE_MBC1:
 	case CARTTYPE_MBC1_RAM:
 	case CARTTYPE_MBC1_RAM_BATT:
-		//printf("%X <- %X\n", dst, value);
 		if(dst <= 0x5fff){
 			//Bank Numberの上位2ビット
 			cart->rom_banknum = (cart->rom_banknum&0x1f) | (value<<5);
@@ -315,7 +304,6 @@ uint8_t cart_rom0_read8(struct cartridge *cart, uint16_t src) {
 }
 
 uint8_t cart_romn_read8(struct cartridge *cart, uint16_t src) {
-	//printf("rom read\n");
 	return cart->romn[src - V_CART_ROMN];
 }
 

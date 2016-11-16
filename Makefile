@@ -1,5 +1,5 @@
 COMPILER  = gcc
-CFLAGS    = -g -MMD -MP -Wall -Wextra -Winit-self -Wno-missing-field-initializers
+CFLAGS    = -g -O2 -MMD -MP -Wall -Wextra -Winit-self -Wno-missing-field-initializers
 ifeq "$(shell getconf LONG_BIT)" "64"
   LDFLAGS =
 else

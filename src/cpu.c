@@ -6,7 +6,6 @@
 
 //#define SHOW_DISAS
 
-
 #define DISAS_PRINT( fmt, ... ) \
 	fprintf( stdout, \
 			  fmt "\n", \
@@ -244,10 +243,9 @@ void startup() {
 	REG_PC=0x100;
 }
 
-static uint32_t before_div = 0;
+
 void cpu_request_interrupt(uint8_t type) {
 	INTERNAL_IO[IO_IF_R] |= type;
-
 }
 
 

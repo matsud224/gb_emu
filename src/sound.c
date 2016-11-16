@@ -17,6 +17,7 @@ struct rect_channel {
 	int envelope_init_volume;
 	int envelope_steps;
 	int freq;
+	double real_freq;
 	int counter_enabled;
 	int right_enabled;
 	int left_enabled;
@@ -86,6 +87,8 @@ static struct wave_channel ch3;
 static struct noise_channel ch4;
 static struct master_volume master;
 
+static int obtfreq_div1000;
+
 #define REAL_FREQ(freq) (131072.0 / (2048.0 - (freq)))
 
 static double rectwave(double t, double duty) {
@@ -111,9 +114,11 @@ void sound_ch1_writereg(uint16_t ioreg, uint8_t value) {
 		break;
 	case IO_NR13_R:
 		ch1.freq=(ch1.freq&0x700)|value;
+		ch1.real_freq = REAL_FREQ(ch1.freq);
 		break;
 	case IO_NR14_R:
 		ch1.freq=(ch1.freq&0xff)|((value&0x7)<<8);
+		ch1.real_freq = REAL_FREQ(ch1.freq);
 		ch1.counter_enabled=value>>6&0x1;
 		ch1.restart=value>>7;
 		break;
@@ -133,9 +138,11 @@ void sound_ch2_writereg(uint16_t ioreg, uint8_t value) {
 		break;
 	case IO_NR23_R:
 		ch2.freq=(ch2.freq&0x700)|value;
+		ch2.real_freq = REAL_FREQ(ch2.freq);
 		break;
 	case IO_NR24_R:
 		ch2.freq=(ch2.freq&0xff)|((value&0x7)<<8);
+		ch2.real_freq = REAL_FREQ(ch2.freq);
 		ch2.counter_enabled=value>>6&0x1;
 		ch2.restart=value>>7;
 		break;
@@ -287,27 +294,29 @@ uint8_t sound_master_readreg(uint16_t ioreg) {
 static int ch1_wave() {
 	if(ch1.restart){
 		ch1.volume = ch1.envelope_init_volume;
-		ch1.sweep_steps = Obtained.freq*ch1.sweep_time / 128;
-		ch1.envelope_steps = Obtained.freq*ch1.envelope_time / 64;
+		ch1.sweep_steps = Obtained.freq*ch1.sweep_time>>7;
+		ch1.envelope_steps = Obtained.freq*ch1.envelope_time>>6;
 		ch1.sweep_countdown = ch1.sweep_steps;
 		ch1.restart = 0;
 		ch1.status = 1;
 		ch1.prev = -1;
 		if(ch1.counter_enabled)
-			ch1.remaining_time = (64-ch1.length)*1000/256;
-		ch1.ms_countdown = Obtained.freq / 1000; //1ms経過までのステップ数
+			ch1.remaining_time = (64-ch1.length)*1000>>8;
+		ch1.ms_countdown = obtfreq_div1000; //1ms経過までのステップ数
+		ch1.real_freq = REAL_FREQ(ch1.freq);
 	}
 
-	int is_edge = ch1.prev != rectwave(ch1.step * REAL_FREQ(ch1.freq)/Obtained.freq, duty_table[ch1.duty_num]);
-	//printf("sweep_time=%d, cd=%d, edge=%d, prev=%d\n", ch1.sweep_time, ch1.sweep_countdown, is_edge, ch1.prev);
+	int frame = rectwave(ch1.step * ch1.real_freq /Obtained.freq, duty_table[ch1.duty_num]);
+	int is_edge = ch1.prev != frame;
 	if(ch1.sweep_time!=0 && ch1.sweep_countdown==0 && is_edge && ch1.prev==-1){
 		if(ch1.sweep_dir == 0 && ch1.freq+(ch1.freq>>ch1.sweep_diff)>2048){
 			ch1.status = 0;
 		}else if(!(ch1.sweep_dir == 1 && ch1.freq>>ch1.sweep_diff<0)){
 			ch1.freq += (ch1.sweep_dir?-1:1) * (ch1.freq>>ch1.sweep_diff);
-			//printf("freq = %d, real=%lf\n", ch1.freq, REAL_FREQ(ch1.freq));
+			ch1.real_freq = REAL_FREQ(ch1.freq);
 			ch1.sweep_countdown = ch1.sweep_steps;
 			ch1.step=0;
+			frame = rectwave(ch1.step * ch1.real_freq/Obtained.freq, duty_table[ch1.duty_num]);
 		}
 	}
 	if(ch1.envelope_time!=0 && ch1.envelope_steps!=0 && ch1.step%ch1.envelope_steps == 0){
@@ -318,7 +327,8 @@ static int ch1_wave() {
 		}
 	}
 
-	ch1.prev = rectwave(ch1.step++ * REAL_FREQ(ch1.freq) / Obtained.freq, duty_table[ch1.duty_num]);
+	ch1.prev = frame;
+	ch1.step++;
 
 	if(ch1.sweep_countdown>0)
 		ch1.sweep_countdown--;
@@ -341,12 +351,13 @@ static int ch1_wave() {
 static int ch2_wave() {
 	if(ch2.restart){
 		ch2.volume = ch2.envelope_init_volume;
-		ch2.envelope_steps = Desired.freq*ch2.envelope_time / 64;
+		ch2.envelope_steps = Desired.freq*ch2.envelope_time>>6;
 		ch2.restart = 0;
 		ch2.status = 1;
 		if(ch2.counter_enabled)
-			ch2.remaining_time = (64-ch2.length)*1000/256;
+			ch2.remaining_time = (64-ch2.length)*1000>>8;
 		ch2.ms_countdown = Obtained.freq / 1000; //1ms経過までのステップ数
+		ch2.real_freq = REAL_FREQ(ch2.freq);
 	}
 
 	if(ch2.envelope_time!=0 && ch2.envelope_steps!=0 && ch2.step%ch2.envelope_steps == 0){
@@ -370,7 +381,7 @@ static int ch2_wave() {
 	if(!ch2.status)
 		return 0;
 
-	return rectwave(ch2.step++ * REAL_FREQ(ch2.freq) / Obtained.freq, duty_table[ch2.duty_num]) * ch2.volume;
+	return rectwave(ch2.step++ * ch2.real_freq / Obtained.freq, duty_table[ch2.duty_num]) * ch2.volume;
 }
 
 static int ch3_wave() {
@@ -378,7 +389,7 @@ static int ch3_wave() {
 		ch3.restart = 0;
 		ch3.status = 1;
 		if(ch3.counter_enabled)
-			ch3.remaining_time = (256-ch3.length)*1000/256;
+			ch3.remaining_time = (256-ch3.length)*1000>>8;
 		ch3.ms_countdown = Obtained.freq / 1000; //1ms経過までのステップ数
 		ch3.wave_index = 0;
 	}
@@ -462,10 +473,10 @@ static void callback(void *unused, Uint8 *stream, int len) {
 	Sint16 *frames = (Sint16 *) stream;
 	int framesize = len / 2;
 	for (int i = 0; i < framesize; i+=2) {
-		int ch1_val=ch1_wave()*32, ch2_val=ch2_wave()*32, ch3_val=ch3_wave()*32, ch4_val=ch4_wave()*32;
-        frames[i] = master.all_enabled*(ch1.left_enabled*ch1_val+ch2.left_enabled*ch2_val+ch3.left_enabled*ch3_val+ch4.left_enabled*ch4_val);
+		int ch1_val=ch1_wave(), ch2_val=ch2_wave(), ch3_val=ch3_wave(), ch4_val=ch4_wave();
+        frames[i] = master.all_enabled*32*(ch1.left_enabled*ch1_val+ch2.left_enabled*ch2_val+ch3.left_enabled*ch3_val+ch4.left_enabled*ch4_val);
         frames[i] = frames[i] + (frames[i] * master.left_enabled);
-        frames[i+1] = master.all_enabled*(ch1.right_enabled*ch1_val+ch2.right_enabled*ch2_val+ch3.right_enabled*ch3_val+ch4.right_enabled*ch4_val);
+        frames[i+1] = master.all_enabled*32*(ch1.right_enabled*ch1_val+ch2.right_enabled*ch2_val+ch3.right_enabled*ch3_val+ch4.right_enabled*ch4_val);
 		frames[i+1] = frames[i+1] + (frames[i+1] * master.right_enabled);
 	}
 }
@@ -477,16 +488,9 @@ void sound_init() {
 	Desired.samples= 2048;
 	Desired.callback= callback;
 	Desired.userdata= NULL;
-/*
-	ch1.sweep_time=7;
-	ch1.sweep_dir=0;
-	ch1.sweep_diff=7;
-	ch1.envelope_time=0;
-	ch1.freq = 0x6e7;
-	ch1.envelope_init_volume = 16;
-	ch1.restart=1;
-*/
+
 	SDL_OpenAudio(&Desired, &Obtained);
+	obtfreq_div1000 = Obtained.freq / 1000;
 	SDL_PauseAudio(0);
 
 	return;

@@ -85,7 +85,6 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 		case IO_TMA_R: INTERNAL_IO[IO_TMA_R]=value; break;
 		case IO_TAC_R:
 			INTERNAL_IO[IO_TAC_R]=value;
-			//TIMA=INTERNAL_IO[IO_TMA_R];
 			switch(value&0x3){
 			case 0: timer_interval = 1024; break;
 			case 1: timer_interval = 16; break;
