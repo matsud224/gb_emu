@@ -119,6 +119,7 @@ static void update_mapping(struct cartridge *cart) {
 			uint8_t romnum = cart->rom_banknum&0x7f;
 			if(romnum==0x0 || romnum==0x20 || romnum==0x40 || romnum==0x60)
 				romnum++;
+			romnum %= get_romsize(cart->header.romsize)/0x4000;
             cart->romn = cart->rom + (0x4000*romnum);
             //printf("MBC1: rom#%d\n", romnum);
 		}else{
@@ -126,6 +127,7 @@ static void update_mapping(struct cartridge *cart) {
 			uint8_t romnum = cart->rom_banknum&0x1f;
 			if(romnum==0x0)
 				romnum++;
+			romnum %= get_romsize(cart->header.romsize)/0x4000;
 			cart->romn = cart->rom + (0x4000*romnum);
 			//printf("MBC1: rom#%d\n", romnum);
 		}

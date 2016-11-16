@@ -167,7 +167,12 @@ int main(int argc, char *argv[]) {
 			fname=argv[2];
 		}
 		time_t t;
-		uint8_t *ram = open_ram(fname, ramsize_table[hdr->ramsize], &t);
+
+		int ramsize = ramsize_table[hdr->ramsize];
+		if(hdr->carttype==CARTTYPE_MBC2 || hdr->carttype==CARTTYPE_MBC2_BATT)
+			ramsize = 512;
+
+		uint8_t *ram = open_ram(fname, ramsize, &t);
 		if(ram == NULL){
 			printf("open_ram failed\n");
 			return -1;
