@@ -252,6 +252,7 @@ void cpu_request_interrupt(uint8_t type) {
 
 
 int logging_enabled = 0;
+static int delayed_ei = 0;
 
 //超過サイクル数を返す
 int cpu_exec(int cycles) {
@@ -270,24 +271,25 @@ int cpu_exec(int cycles) {
 				INTERNAL_IO[IO_IF_R] &= (~cause);
 
 				switch(cause){
-				case INT_VBLANK: printf("[VBRANK  %d]\n", DIV-before_div); before_div=DIV; break;
-				}
-
-				switch(cause){
-				case INT_VBLANK: CALL_ADDR(0x40, REG_PC); CLOCK(16); break;
-				case INT_LCDSTAT: CALL_ADDR(0x48, REG_PC); CLOCK(16); break;
-				case INT_TIMER:  CALL_ADDR(0x50, REG_PC); CLOCK(16); break;
-				case INT_SERIAL: CALL_ADDR(0x58, REG_PC); CLOCK(16); break;
-				case INT_JOYPAD: CALL_ADDR(0x60, REG_PC); CLOCK(16); break;
+				case INT_VBLANK: CALL_ADDR(0x40, REG_PC); CLOCK(20); break;
+				case INT_LCDSTAT: CALL_ADDR(0x48, REG_PC); CLOCK(20); break;
+				case INT_TIMER:  CALL_ADDR(0x50, REG_PC); CLOCK(20); break;
+				case INT_SERIAL: CALL_ADDR(0x58, REG_PC); CLOCK(20); break;
+				case INT_JOYPAD: CALL_ADDR(0x60, REG_PC); CLOCK(20); break;
 				}
 			}
 		}
 
-		if(CPUMODE == CPU_MODE_STOP && memory_read8(IO_P1)&0xf)
+		if(CPUMODE == CPU_MODE_STOP && !(memory_read8(IO_P1)&0xf))
 			CPUMODE = CPU_MODE_NORMAL;
 
 		if(CPUMODE!=CPU_MODE_NORMAL){
 			CLOCK(4); continue;
+		}
+
+		if(delayed_ei){
+			delayed_ei = 0;
+			FLG_IME = 1;
 		}
 
 		#ifdef SHOW_DISAS
@@ -834,7 +836,7 @@ int cpu_exec(int cycles) {
 		case 0xF8: /* LDHL SP,n 00HC */  	ADDHLSP_16; REG_PC+=2; CLOCK(12); continue;
 		case 0xF9: /* LD SP,HL ---- */  	REG_SP=REG_HL; REG_PC+=1; CLOCK(8); continue;
 		case 0xFA: /* LD A,(nn) ---- */  	REG_A=memory_read8(OPERAND16); REG_PC+=3; CLOCK(16); continue;
-		case 0xFB: /* EI - ---- */  		FLG_IME=1; REG_PC+=1; CLOCK(4); continue;
+		case 0xFB: /* EI - ---- */  		delayed_ei = 1; REG_PC+=1; CLOCK(4); continue;
 		case 0xFE: /* CP # Z1HC */  		BINOPA_CP(OPERAND8); REG_PC+=2; CLOCK(8); continue;
 		case 0xFF: /* RST 38H ---- */		RST(0x38); CLOCK(16); continue;
 		}

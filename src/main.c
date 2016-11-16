@@ -301,7 +301,7 @@ int main(int argc, char *argv[]) {
 
 		if(INTERNAL_IO[IO_LCDC_R]&0x80){
 			while(INTERNAL_IO[IO_LY_R]<=153){
-				over=cpu_exec(/*456*/456-over);
+				over=cpu_exec(/*456*/464-over); //464 ... for street fighter 2
 				INC_LY;
 			}
 		}

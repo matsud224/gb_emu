@@ -52,9 +52,6 @@ void memory_free() {
 }
 
 uint8_t memory_write8(uint16_t dst, uint8_t value) {
-	if(dst==0xc1ca)
-		printf("0xc1ca = %d\n", value);
-
 	if(dst < V_CART_ROMN){
 		//CART_ROM0
 		cart_rom0_write8(cart, dst, value);
@@ -83,12 +80,12 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 		//INTERNAL_IO
 		switch(dst-V_INTERNAL_IO){
 		case IO_P1_R: INTERNAL_IO[IO_P1_R] = value; break;
-		case IO_DIV_R: /*DIV = 0;*/ DIV=DIV&0xff; break;
+		case IO_DIV_R: DIV = 0; break;
 		case IO_TIMA_R: TIMA=value; break;
 		case IO_TMA_R: INTERNAL_IO[IO_TMA_R]=value; break;
 		case IO_TAC_R:
 			INTERNAL_IO[IO_TAC_R]=value;
-			TIMA=0;
+			//TIMA=INTERNAL_IO[IO_TMA_R];
 			switch(value&0x3){
 			case 0: timer_interval = 1024; break;
 			case 1: timer_interval = 16; break;
@@ -145,7 +142,9 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 			sound_master_writereg(dst-V_INTERNAL_IO, value); break;
 		default:
 			//wave ramのために
-			INTERNAL_IO[dst-V_INTERNAL_IO]=value; break;
+			if(dst>=0xff30 && dst<=0xff3f)
+				INTERNAL_IO[dst-V_INTERNAL_IO]=value;
+			break;
 		}
 	}else if(dst < V_INTERNAL_INTMASK){
 		//INTERNAL_STACK
@@ -240,7 +239,9 @@ uint8_t memory_read8(uint16_t src) {
 			return sound_master_readreg(src-V_INTERNAL_IO);
 		default:
 			//wave ramのために
-			return INTERNAL_IO[src-V_INTERNAL_IO];
+			if(src>=0xff30 && src<=0xff3f)
+				return INTERNAL_IO[src-V_INTERNAL_IO];
+			break;
 		}
 	}else if(src < V_INTERNAL_INTMASK){
 		//INTERNAL_STACK

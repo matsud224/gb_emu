@@ -18,7 +18,7 @@ static Uint32 ABSCOLOR[4];
 
 #define SPRITECOUNT 40
 
-static int LCDMODE = LCDMODE_VBLANK;
+static int LCDMODE = 2;
 
 uint8_t lcd_get_mode() {
 	return LCDMODE;
