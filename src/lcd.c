@@ -92,7 +92,7 @@ void lcd_draw_window_oneline(Uint32 buf[]) {
 	int tile_y=map_y>>3;
 	int map_x=-wx;
 	if(y<wy) return;
-	for(int x=0; x<160; x++, map_x++){
+	for(int x=0; x<160; x++, map_x++, current_index++){
 		if(x<wx) continue;
 		int tile_x=map_x>>3;
 		uint8_t *thisdata; //タイルパターンデータの開始アドレス
@@ -103,7 +103,7 @@ void lcd_draw_window_oneline(Uint32 buf[]) {
 
 		int in_x=map_x%8;
 		uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
-		buf[current_index++] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
+		buf[current_index] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
 	}
 }
 
