@@ -288,7 +288,8 @@ int cpu_exec(int cycles) {
 		}
 
 		if(delayed_ei){
-			delayed_ei = 0;
+			delayed_ei--;
+		}else{
 			FLG_IME = 1;
 		}
 

@@ -24,8 +24,8 @@
 #define handle_error(msg) \
     do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
-#define SCREEN_WIDTH (160<<2)
-#define SCREEN_HEIGHT (144<<2)
+#define SCREEN_WIDTH (160<<3)
+#define SCREEN_HEIGHT (144<<3)
 
 #define TIMER_START(t) ((t)=SDL_GetTicks())
 #define TIMER_GET(t) (SDL_GetTicks()-(t))
