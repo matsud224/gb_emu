@@ -45,6 +45,7 @@ struct wave_channel {
 	int restart;
 	int ms_countdown;
 	int wave_index;
+	double precalc;
 };
 
 struct noise_channel {
@@ -162,9 +163,11 @@ void sound_ch3_writereg(uint16_t ioreg, uint8_t value) {
 		break;
 	case IO_NR33_R:
 		ch3.freq=(ch3.freq&0x700)|value;
+		ch3.precalc = ((65535.0/(2048.0-ch3.freq))*32.0);
 		break;
 	case IO_NR34_R:
 		ch3.freq=(ch3.freq&0xff)|((value&0x7)<<8);
+		ch3.precalc = ((65535.0/(2048.0-ch3.freq))*32.0);
 		ch3.counter_enabled=value>>6&0x1;
 		ch3.restart=value>>7;
 		break;
@@ -335,7 +338,7 @@ static int ch1_wave() {
 
 	if(ch1.ms_countdown>0){
 		if(--ch1.ms_countdown == 0){
-			ch1.ms_countdown = Obtained.freq/1000;
+			ch1.ms_countdown = obtfreq_div1000;
 			ch1.remaining_time--;
 		}
 	}
@@ -356,7 +359,7 @@ static int ch2_wave() {
 		ch2.status = 1;
 		if(ch2.counter_enabled)
 			ch2.remaining_time = (64-ch2.length)*1000>>8;
-		ch2.ms_countdown = Obtained.freq / 1000; //1ms経過までのステップ数
+		ch2.ms_countdown = obtfreq_div1000; //1ms経過までのステップ数
 		ch2.real_freq = REAL_FREQ(ch2.freq);
 	}
 
@@ -370,7 +373,7 @@ static int ch2_wave() {
 
 	if(ch2.ms_countdown>0){
 		if(--ch2.ms_countdown == 0){
-			ch2.ms_countdown = Obtained.freq/1000;
+			ch2.ms_countdown = obtfreq_div1000;
 			ch2.remaining_time--;
 		}
 	}
@@ -390,13 +393,14 @@ static int ch3_wave() {
 		ch3.status = 1;
 		if(ch3.counter_enabled)
 			ch3.remaining_time = (256-ch3.length)*1000>>8;
-		ch3.ms_countdown = Obtained.freq / 1000; //1ms経過までのステップ数
+		ch3.ms_countdown = obtfreq_div1000; //1ms経過までのステップ数
 		ch3.wave_index = 0;
+		ch3.precalc = ((65535.0/(2048.0-ch3.freq))*32.0);
 	}
 
 	int frame;
 
-	ch3.wave_index = fmod(ch3.step * ((65535.0/(2048.0-ch3.freq))*32.0) / Obtained.freq, 32);
+	ch3.wave_index = fmod(ch3.step * ch3.precalc / Obtained.freq, 32);
 
 	if(ch3.wave_index%2)
 		frame = INTERNAL_IO[IO_WAVERAM_BEGIN_R+ch3.wave_index/2]&0xf;
@@ -407,7 +411,7 @@ static int ch3_wave() {
 
 	if(ch3.ms_countdown>0){
 		if(--ch3.ms_countdown == 0){
-			ch3.ms_countdown = Obtained.freq/1000;
+			ch3.ms_countdown = obtfreq_div1000;
 			ch3.remaining_time--;
 		}
 	}
@@ -432,7 +436,7 @@ static int ch4_wave() {
 		ch4.status = 1;
 		if(ch4.counter_enabled)
 			ch4.remaining_time = (64-ch4.length)*1000/256;
-		ch4.ms_countdown = Obtained.freq / 1000; //1ms経過までのステップ数
+		ch4.ms_countdown = obtfreq_div1000; //1ms経過までのステップ数
 		ch4.shiftreg = 0xffff;
 		ch4.prng_out = 1;
 	}
@@ -447,7 +451,7 @@ static int ch4_wave() {
 
 	if(ch4.ms_countdown>0){
 		if(--ch4.ms_countdown == 0){
-			ch4.ms_countdown = Obtained.freq/1000;
+			ch4.ms_countdown = obtfreq_div1000;
 			ch4.remaining_time--;
 		}
 	}
@@ -485,7 +489,7 @@ void sound_init() {
 	Desired.freq= 44100;
 	Desired.format= AUDIO_S16LSB;
 	Desired.channels= 2;
-	Desired.samples= 2048;
+	Desired.samples= 1024;
 	Desired.callback= callback;
 	Desired.userdata= NULL;
 

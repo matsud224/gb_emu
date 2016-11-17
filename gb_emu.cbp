@@ -58,6 +58,10 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/memory.h" />
+		<Unit filename="src/serial.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/serial.h" />
 		<Unit filename="src/sound.c">
 			<Option compilerVar="CC" />
 		</Unit>

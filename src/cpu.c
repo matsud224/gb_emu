@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include "cpu.h"
 #include "memory.h"
+#include "serial.h"
 
 //#define SHOW_DISAS
 
@@ -288,6 +289,24 @@ int cpu_exec(int cycles) {
 		if(delayed_ei){
 			delayed_ei=0;
 			FLG_IME = 1;
+		}
+
+		int data;
+		if(INTERNAL_IO[IO_SC_R] & 0x1){
+			//internal clock
+			if(SERIALSTATE==1 && (data=serial_recv())>=0){
+				INTERNAL_IO[IO_SB_R] = data;
+				SERIALSTATE = 0;
+				cpu_request_interrupt(INT_SERIAL);
+			}
+		}else{
+			//external clock
+			if((data=serial_recv())>=0){
+				serial_send();
+				INTERNAL_IO[IO_SB_R] = data;
+				SERIALSTATE = 0;
+				cpu_request_interrupt(INT_SERIAL);
+			}
 		}
 
 		#ifdef SHOW_DISAS

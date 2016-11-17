@@ -5,6 +5,7 @@
 
 extern uint32_t DIV;
 extern uint16_t TIMA;
+extern int SERIALSTATE;
 extern int timer_remaining;
 extern int timer_interval;
 

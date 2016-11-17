@@ -14,6 +14,7 @@
 #include "lcd.h"
 #include "joypad.h"
 #include "sound.h"
+#include "serial.h"
 
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_ttf.h"
@@ -21,8 +22,8 @@
 #include "SDL2/SDL_keyboard.h"
 #include "SDL2/SDL_gamecontroller.h"
 
-#define SCREEN_WIDTH (160<<3)
-#define SCREEN_HEIGHT (144<<3)
+static int SCREEN_WIDTH = 160;
+static int SCREEN_HEIGHT = 144;
 
 #define TIMER_START(t) ((t)=SDL_GetTicks())
 #define TIMER_GET(t) (SDL_GetTicks()-(t))
@@ -130,13 +131,63 @@ static int sdl_init() {
 
 extern int logging_enabled;
 
+extern char	*optarg;
+extern int	optind, opterr;
 int main(int argc, char *argv[]) {
-	if(argc != 2 && argc != 3){
-		printf("too few arguments\n");
+	int result;
+	char *romname;
+	char ramname[256] = {'\0'};
+	char hostname[256] = {'\0'};
+	int port = 35902, zoom = 1;
+	int has_ram=0, has_host = 0;
+	int tcpmode = 0; //0..使用しない/1..サーバ/2..クライアント
+	while((result=getopt(argc, argv, "lcs:p:h:z:"))!=-1){
+		switch(result){
+		case 'l':
+			//tcp listen(server)
+			tcpmode = 1;
+			break;
+		case 'c':
+			//tcp connect(client)
+			tcpmode = 2;
+			break;
+		case 's':
+			//save data
+			has_ram = 1;
+			strncpy(ramname, optarg, 256);
+			break;
+		case 'p':
+			//port no
+			port = atoi(optarg);
+			break;
+		case 'h':
+			//host
+			has_host = 1;
+			strncpy(hostname, optarg, 256);
+			break;
+		case 'z':
+			//zoom
+			zoom = atoi(optarg);
+			break;
+		case ':':
+		case '?':
+			exit(-1);
+		}
+	}
+	argc -= optind;
+	argv += optind;
+	//この時点でargv[0]~argv[argc-1]にオプションでない引数が入ってる
+	if(argc == 0){
+		puts("missing rom file name");
 		return -1;
 	}
+	romname = argv[0];
 
-	uint8_t *rom = open_rom(argv[1]);
+
+	SCREEN_HEIGHT *= zoom;
+	SCREEN_WIDTH *= zoom;
+
+	uint8_t *rom = open_rom(romname);
 	if(rom==NULL){
 		printf("open_rom failed\n");
 		return -1;
@@ -156,12 +207,12 @@ int main(int argc, char *argv[]) {
 	if(hdr->ramsize!=0){
 		char buf[256];
 		char *fname;
-		if(argc<=2){
-			strncpy(buf, argv[1], 256);
+		if(!has_ram){
+			strncpy(buf, romname, 256);
 			strncat(buf, ".save", 256-strlen(buf));
 			fname=buf;
 		}else{
-			fname=argv[2];
+			fname=ramname;
 		}
 		time_t t;
 
@@ -171,15 +222,34 @@ int main(int argc, char *argv[]) {
 
 		uint8_t *ram = open_ram(fname, ramsize, &t);
 		if(ram == NULL){
-			printf("open_ram failed\n");
+			puts("open_ram failed");
 			return -1;
 		}
 		cart_setram(cart, ram, t);
 	}
 
+	switch(tcpmode){
+	case 1:
+		//server
+		if(serial_serverinit(port) < 0){
+			puts("network error");
+		}
+		break;
+	case 2:
+		//client
+		if(has_host){
+			if(serial_clientinit(hostname, port) < 0){
+				puts("network error");
+			}
+		}else{
+			puts("missing hostname");
+		}
+		break;
+	}
+
 	if(memory_init(cart)){
 		free(cart);
-		printf("memory_init failed\n");
+		puts("memory_init failed");
 		return -1;
 	}
 
@@ -303,7 +373,7 @@ int main(int argc, char *argv[]) {
 
 		if(INTERNAL_IO[IO_LCDC_R]&0x80){
 			while(INTERNAL_IO[IO_LY_R]<=153){
-				over=cpu_exec(/*456*/464-over); //464 ... for street fighter 2
+				over=cpu_exec(/*456*/470-over); //464 ... for street fighter 2
 				INC_LY;
 			}
 		}
@@ -319,6 +389,9 @@ int main(int argc, char *argv[]) {
 	SDL_Quit();
 
 	memory_free();
+
+	if(tcpmode>0)
+		serial_close();
 
 	return 0;
 }
