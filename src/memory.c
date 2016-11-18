@@ -4,6 +4,7 @@
 #include "lcd.h"
 #include "joypad.h"
 #include "sound.h"
+#include "serial.h"
 #include <stdlib.h>
 #include <time.h>
 #include "SDL2/SDL_keyboard.h"
@@ -25,6 +26,7 @@ uint32_t DIV;
 uint16_t TIMA;
 int SERIALSTATE = 0;
 int timer_remaining, timer_interval;
+int serial_remaining, serial_interval = 0;
 
 
 static struct cartridge *cart;
@@ -83,10 +85,13 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 		switch(dst-V_INTERNAL_IO){
 		case IO_SB_R: INTERNAL_IO[IO_SB_R] = value; break;
 		case IO_SC_R:
+			if((INTERNAL_IO[IO_SC_R]&0x1) == (value&0x1))
+				master_sent = 1;
 			INTERNAL_IO[IO_SC_R] = value;
 			SERIALSTATE = value>>7;
-			if(SERIALSTATE && INTERNAL_IO[IO_SC_R]&0x1)
-				serial_send();
+			if(SERIALSTATE && INTERNAL_IO[IO_SC_R]&0x1){
+				master_sent = 0;
+			}
 			break;
 		case IO_P1_R: INTERNAL_IO[IO_P1_R] = value; break;
 		case IO_DIV_R: DIV = 0; break;
@@ -200,7 +205,7 @@ uint8_t memory_read8(uint16_t src) {
 		//INTERNAL_IO
 		switch(src-V_INTERNAL_IO){
 		case IO_SB_R: return INTERNAL_IO[IO_SB_R];
-		case IO_SC_R: return (SERIALSTATE<<7) | (INTERNAL_IO[IO_SC_R] & 0x1);
+		case IO_SC_R: return (SERIALSTATE<<7) | (INTERNAL_IO[IO_SC_R] & 0x1) | 0x2;
 		case IO_P1_R: return joypad_status();
 		case IO_DIV_R: return DIV>>8;
 		case IO_TIMA_R: return TIMA;

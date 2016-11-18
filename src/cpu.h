@@ -1,5 +1,7 @@
 #pragma once
 
+extern int master_sent;
+
 void startup(void);
 void cpu_request_interrupt(uint8_t type);
 int cpu_exec(int cycles);

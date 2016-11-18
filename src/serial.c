@@ -8,6 +8,7 @@
 #include <netdb.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <errno.h>
 
 static int sock = -1;
 
@@ -17,23 +18,27 @@ int serial_recv() {
 
 	int result;
 	uint8_t data;
-	if((result=read(sock, &data, 1))==1){
+	if((result=recv(sock, &data, 1, MSG_DONTWAIT))==1){
+		printf("r %X\n", data);
 		return data;
-	}else if(result < 0){
-		perror("read");
+	}else if(result==-1 && errno!=EAGAIN && errno!=EWOULDBLOCK){
+		perror("recv");
 		close(sock);
 		sock = -1;
+		return -1;
 	}
-	return -1;
+	return -2;
 }
 
-void serial_send() {
+void serial_send(uint8_t data) {
 	if(sock<0) return;
 
-	if(write(sock, &INTERNAL_IO[IO_SB_R], 1)!=1){
+	if(send(sock, &data, 1, MSG_NOSIGNAL)!=1){
 		perror("write");
 		close(sock);
 		sock = -1;
+	}else{
+		printf("w %X\n", data);
 	}
 }
 
@@ -75,6 +80,9 @@ int serial_serverinit(int port) {
 
 	close(sock0);
 
+	serial_interval = 512;
+	serial_remaining = serial_interval;
+
 	return 0;
 }
 
@@ -105,6 +113,9 @@ int serial_clientinit(char *host, int port) {
 		sock = -1;
 		return -1;
 	}
+
+	serial_interval = 512;
+	serial_remaining = serial_interval;
 
 	return 0;
 }

@@ -8,6 +8,8 @@ extern uint16_t TIMA;
 extern int SERIALSTATE;
 extern int timer_remaining;
 extern int timer_interval;
+extern int serial_remaining;
+extern int serial_interval;
 
 extern uint8_t*		INTERNAL_VRAM;
 extern uint8_t*		INTERNAL_OAM;

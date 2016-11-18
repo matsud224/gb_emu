@@ -228,6 +228,12 @@ int main(int argc, char *argv[]) {
 		cart_setram(cart, ram, t);
 	}
 
+	if(memory_init(cart)){
+		free(cart);
+		puts("memory_init failed");
+		return -1;
+	}
+
 	switch(tcpmode){
 	case 1:
 		//server
@@ -245,12 +251,6 @@ int main(int argc, char *argv[]) {
 			puts("missing hostname");
 		}
 		break;
-	}
-
-	if(memory_init(cart)){
-		free(cart);
-		puts("memory_init failed");
-		return -1;
 	}
 
 	startup();
@@ -373,7 +373,7 @@ int main(int argc, char *argv[]) {
 
 		if(INTERNAL_IO[IO_LCDC_R]&0x80){
 			while(INTERNAL_IO[IO_LY_R]<=153){
-				over=cpu_exec(/*456*/470-over); //464 ... for street fighter 2
+				over=cpu_exec(/*456*/468-over); //464 ... for street fighter 2
 				INC_LY;
 			}
 		}
