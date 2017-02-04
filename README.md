@@ -11,5 +11,5 @@ Depends: libsdl2
 
 # Usage
 ```
-./gb_emu [ROM file] [RAM file(optional)]
+./gb_emu ROMfile [-s SaveData(Cartridge RAM)] [-z Zoom]
 ```
