@@ -34,11 +34,13 @@ struct cartridge *cart_init(uint8_t *rom) {
 	cart->ram_enabled = 1;
 	memcpy(&(cart->header), rom+0x100, sizeof(struct gb_carthdr));
 
+	/*
 	if(cart->header.cgbflag == CGBFLAG_CGBONLY) {
 		free(cart);
 		printf("cart_init: cgb only\n");
 		return NULL;
 	}
+	*/
 
 	if(memcmp(cart->header.logo, VALID_LOGO, sizeof(VALID_LOGO))!=0) {
 		//free(cart);

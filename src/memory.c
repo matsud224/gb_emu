@@ -14,16 +14,22 @@
 #define IO_DIV_R 0x04
 #define IO_TIMA_R 0x05
 
+#define MAX(x,y) ((x)<(y)?(y):(x))
+
 uint8_t*			INTERNAL_VRAM = NULL;
+static uint8_t*		INTERNAL_VRAM_VARIABLE = NULL;
 static uint8_t*		INTERNAL_WRAM = NULL;
-static uint8_t*		INTERNAL_WRAM_MIRROR;
+static uint8_t*		INTERNAL_WRAM_VARIABLE = NULL;
 uint8_t*			INTERNAL_OAM = NULL;
 static uint8_t*		INTERNAL_RESERVED = NULL;
 uint8_t*			INTERNAL_IO = NULL;
 static uint8_t*		INTERNAL_STACK = NULL;
+uint8_t*			COLORPALETTE_BG = NULL;
+uint8_t*			COLORPALETTE_SP = NULL;
 
 uint32_t DIV;
 uint16_t TIMA;
+int CGBMODE;
 int SERIALSTATE = 0;
 int timer_remaining, timer_interval;
 int serial_remaining, serial_interval = 0;
@@ -33,13 +39,29 @@ static struct cartridge *cart;
 
 int memory_init(struct cartridge *c) {
 	cart = c;
-	if((INTERNAL_VRAM = malloc(sizeof(uint8_t) * 0x2000)) == NULL) goto err;
-	if((INTERNAL_WRAM = malloc(sizeof(uint8_t) * 0x2000)) == NULL) goto err;
-	INTERNAL_WRAM_MIRROR = INTERNAL_WRAM;
+
+	if(cart_header(c)->cgbflag == CGBFLAG_GB)
+		CGBMODE = 0;
+	else
+		CGBMODE = 1;
+
 	if((INTERNAL_OAM = malloc(sizeof(uint8_t) * 0xa0)) == NULL) goto err;
 	if((INTERNAL_RESERVED = malloc(sizeof(uint8_t) * 0x60)) == NULL) goto err;
 	if((INTERNAL_IO = malloc(sizeof(uint8_t) * 0x100)) == NULL) goto err;
 	if((INTERNAL_STACK = malloc(sizeof(uint8_t) * 0x7f)) == NULL) goto err;
+
+	if(CGBMODE){
+		if((INTERNAL_VRAM = malloc(sizeof(uint8_t) * 0x2000 * 2)) == NULL) goto err;
+		if((INTERNAL_WRAM = malloc(sizeof(uint8_t) * 0x8000)) == NULL) goto err;
+		if((COLORPALETTE_BG = malloc(sizeof(uint8_t) * 0x40)) == NULL) goto err;
+		if((COLORPALETTE_SP = malloc(sizeof(uint8_t) * 0x40)) == NULL) goto err;
+	}else{
+		if((INTERNAL_VRAM = malloc(sizeof(uint8_t) * 0x2000)) == NULL) goto err;
+		if((INTERNAL_WRAM = malloc(sizeof(uint8_t) * 0x2000)) == NULL) goto err;
+	}
+	INTERNAL_VRAM_VARIABLE = INTERNAL_VRAM;
+	INTERNAL_WRAM_VARIABLE = INTERNAL_WRAM + 0x1000;
+
 	return 0;
 err:
 	memory_free();
@@ -47,12 +69,14 @@ err:
 }
 
 void memory_free() {
-	if(INTERNAL_VRAM!=NULL){ free(INTERNAL_VRAM); INTERNAL_VRAM = NULL; }
-	if(INTERNAL_WRAM!=NULL){ free(INTERNAL_WRAM); INTERNAL_WRAM = NULL; INTERNAL_WRAM_MIRROR = NULL; }
+	if(INTERNAL_VRAM!=NULL){ free(INTERNAL_VRAM); INTERNAL_VRAM = NULL; INTERNAL_VRAM_VARIABLE = NULL; }
+	if(INTERNAL_WRAM!=NULL){ free(INTERNAL_WRAM); INTERNAL_WRAM = NULL; INTERNAL_WRAM_VARIABLE = NULL; }
 	if(INTERNAL_OAM!=NULL){ free(INTERNAL_OAM); INTERNAL_OAM = NULL; }
 	if(INTERNAL_RESERVED!=NULL){ free(INTERNAL_RESERVED); INTERNAL_RESERVED = NULL; }
 	if(INTERNAL_IO!=NULL){ free(INTERNAL_IO); INTERNAL_IO = NULL; }
 	if(INTERNAL_STACK!=NULL){ free(INTERNAL_STACK); INTERNAL_STACK = NULL; }
+	if(COLORPALETTE_BG!=NULL){ free(COLORPALETTE_BG); COLORPALETTE_BG = NULL; }
+	if(COLORPALETTE_SP!=NULL){ free(COLORPALETTE_SP); COLORPALETTE_SP = NULL; }
 }
 
 uint8_t memory_write8(uint16_t dst, uint8_t value) {
@@ -63,17 +87,23 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 		//CART_ROMN
 		cart_romn_write8(cart, dst, value);
 	}else if(dst < V_CART_RAMN){
-		//INTERNAL_VRAM
-		INTERNAL_VRAM[dst-V_INTERNAL_VRAM] = value;
+		//INTERNAL_VRAM(variable area)
+		INTERNAL_VRAM_VARIABLE[dst-V_INTERNAL_VRAM] = value;
 	}else if(dst < V_INTERNAL_WRAM){
 		//CART_RAMN
 		cart_ramn_write8(cart, dst, value);
-	}else if(dst < V_INTERNAL_WRAM_MIRROR){
-		//INTERNAL_WRAM
+	}else if(dst < V_INTERNAL_WRAM+0x1000){
+		//INTERNAL_WRAM(fixed area)
 		INTERNAL_WRAM[dst-V_INTERNAL_WRAM] = value;
+	}else if(dst < V_INTERNAL_WRAM_MIRROR){
+		//INTERNAL_WRAM(variable area)
+		INTERNAL_WRAM_VARIABLE[dst-(V_INTERNAL_WRAM+0x1000)] = value;
+	}else if(dst < V_INTERNAL_WRAM_MIRROR+0x1000){
+		//INTERNAL_WRAM_MIRROR(fixed area)
+		INTERNAL_WRAM[dst-V_INTERNAL_WRAM_MIRROR] = value;
 	}else if(dst < V_INTERNAL_OAM){
-		//INTERNAL_WRAM_MIRROR
-		INTERNAL_WRAM_MIRROR[dst-V_INTERNAL_WRAM_MIRROR] = value;
+		//INTERNAL_WRAM_MIRROR(variable area)
+		INTERNAL_WRAM_VARIABLE[dst-(V_INTERNAL_WRAM_MIRROR+0x1000)] = value;
 	}else if(dst < V_INTERNAL_RESERVED){
 		//INTERNAL_OAM
 		INTERNAL_OAM[dst-V_INTERNAL_OAM] = value;
@@ -153,6 +183,62 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 		case IO_NR51_R:
 		case IO_NR52_R:
 			sound_master_writereg(dst-V_INTERNAL_IO, value); break;
+#define CGBCHECK if(!CGBMODE) break;
+		case IO_KEY1_R:
+			CGBCHECK;
+			/* not implemented */
+			break;
+		case IO_VBK_R:
+			CGBCHECK;
+			INTERNAL_IO[IO_VBK_R] = value;
+			INTERNAL_VRAM_VARIABLE = INTERNAL_VRAM + 0x2000*(value & 0x1);
+			break;
+		case IO_HDMA1_R:
+			CGBCHECK; INTERNAL_IO[IO_HDMA1_R] = value; break;
+		case IO_HDMA2_R:
+			CGBCHECK; INTERNAL_IO[IO_HDMA2_R] = value & 0xf8; break;
+		case IO_HDMA3_R:
+			CGBCHECK; INTERNAL_IO[IO_HDMA3_R] = (value&0x1f)+0x80; break;
+		case IO_HDMA4_R:
+			CGBCHECK; INTERNAL_IO[IO_HDMA4_R] = value & 0xf8; break;
+		case IO_HDMA5_R:
+			CGBCHECK;
+			if((value&0x80) == 0){
+				//General Purpose DMA
+				uint16_t src=(INTERNAL_IO[IO_HDMA1_R]<<8) | INTERNAL_IO[IO_HDMA2_R];
+				uint16_t dst=(INTERNAL_IO[IO_HDMA3_R]<<8) | INTERNAL_IO[IO_HDMA4_R];
+				int len = (value&0x7f)/0x10-1;
+				for(int i=0; i<len; i++,src++,dst++)
+					memory_write8(dst, memory_read8(src));
+				INTERNAL_IO[IO_HDMA5_R] = 0xff;
+			}else{
+				//H-Blank DMA
+				INTERNAL_IO[IO_HDMA5_R] = value;
+			}
+			break;
+		case IO_BCPS_R:
+			CGBCHECK; INTERNAL_IO[IO_BCPS_R] = value; break;
+		case IO_BCPD_R:
+			CGBCHECK;
+			uint8_t bcps = INTERNAL_IO[IO_BCPS_R];
+			COLORPALETTE_BG[bcps&0x3f] = value;
+			if(bcps&0x80)
+				INTERNAL_IO[IO_BCPS_R] = (bcps+1)&0xbf;
+			break;
+		case IO_OCPS_R:
+			CGBCHECK; INTERNAL_IO[IO_OCPS_R] = value; break;
+		case IO_OCPD_R:
+			CGBCHECK;
+			uint8_t ocps = INTERNAL_IO[IO_OCPS_R];
+			COLORPALETTE_SP[ocps&0x3f] = value;
+			if(ocps&0x80)
+				INTERNAL_IO[IO_OCPS_R] = (ocps+1)&0xbf;
+			break;
+		case IO_SVBK_R:
+			CGBCHECK;
+			INTERNAL_IO[IO_SVBK_R] = value;
+			INTERNAL_WRAM_VARIABLE = INTERNAL_WRAM + 0x1000*MAX(value&0x7, 1);
+			break;
 		default:
 			//wave ramのために
 			if(dst>=0xff30 && dst<=0xff3f)
@@ -184,17 +270,23 @@ uint8_t memory_read8(uint16_t src) {
 		//CART_ROMN
 		return cart_romn_read8(cart, src);
 	}else if(src < V_CART_RAMN){
-		//INTERNAL_VRAM
-		return INTERNAL_VRAM[src-V_INTERNAL_VRAM];
+		//INTERNAL_VRAM(variable area)
+		return INTERNAL_VRAM_VARIABLE[src-V_INTERNAL_VRAM];
 	}else if(src < V_INTERNAL_WRAM){
 		//CART_RAMN
 		return cart_ramn_read8(cart, src);
-	}else if(src < V_INTERNAL_WRAM_MIRROR){
-		//INTERNAL_WRAM
+	}else if(src < V_INTERNAL_WRAM+0x1000){
+		//INTERNAL_WRAM(fixed area)
 		return INTERNAL_WRAM[src-V_INTERNAL_WRAM];
+	}else if(src < V_INTERNAL_WRAM_MIRROR){
+		//INTERNAL_WRAM(variable area)
+		return INTERNAL_WRAM_VARIABLE[src-(V_INTERNAL_WRAM+0x1000)];
+	}else if(src < V_INTERNAL_WRAM_MIRROR+0x1000){
+		//INTERNAL_WRAM_MIRROR(fixed area)
+		return INTERNAL_WRAM[src-V_INTERNAL_WRAM_MIRROR];
 	}else if(src < V_INTERNAL_OAM){
-		//INTERNAL_WRAM_MIRROR
-		return INTERNAL_WRAM_MIRROR[src-V_INTERNAL_WRAM_MIRROR];
+		//INTERNAL_WRAM_MIRROR(variable area)
+		return INTERNAL_WRAM_VARIABLE[src-(V_INTERNAL_WRAM_MIRROR+0x1000)];
 	}else if(src < V_INTERNAL_RESERVED){
 		//INTERNAL_OAM
 		return INTERNAL_OAM[src-V_INTERNAL_OAM];
@@ -252,6 +344,21 @@ uint8_t memory_read8(uint16_t src) {
 		case IO_NR51_R:
 		case IO_NR52_R:
 			return sound_master_readreg(src-V_INTERNAL_IO);
+		case IO_KEY1_R:
+			CGBCHECK;
+			/* not implemented */
+			break;
+		case IO_VBK_R: return INTERNAL_IO[IO_VBK_R];
+		case IO_HDMA5_R: return INTERNAL_IO[IO_HDMA5_R];
+		case IO_BCPS_R: return INTERNAL_IO[IO_BCPS_R];
+		case IO_BCPD_R:
+			CGBCHECK;
+			return COLORPALETTE_BG[INTERNAL_IO[IO_BCPS_R]&0x3f];
+		case IO_OCPS_R: return INTERNAL_IO[IO_OCPS_R];
+		case IO_OCPD_R:
+			CGBCHECK;
+			return COLORPALETTE_SP[INTERNAL_IO[IO_OCPS_R]&0x3f];
+		case IO_SVBK_R: return INTERNAL_IO[IO_SVBK_R];
 		default:
 			//wave ramのために
 			if(src>=0xff30 && src<=0xff3f)

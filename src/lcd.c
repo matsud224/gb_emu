@@ -43,9 +43,10 @@ void lcd_change_mode(int mode) {
 	}
 }
 
+static SDL_Surface *surface;
 
-
-void lcd_init(SDL_Surface *surface) {
+void lcd_init(SDL_Surface *s) {
+	surface = s;
 	for(int i=0; i<4; i++)
 		ABSCOLOR[i] = SDL_MapRGBA(surface->format, ACTUALCOLOR[i].r, ACTUALCOLOR[i].g, ACTUALCOLOR[i].b, 255);
 }
@@ -53,6 +54,12 @@ void lcd_init(SDL_Surface *surface) {
 void lcd_clear(Uint32 buf[]) {
 	for(int i=0; i<160*144; i++)
 		buf[i] = ABSCOLOR[0];
+}
+
+Uint32 get_color_from_cgbpallete(uint8_t *cpal, int palno, int index){
+	uint8_t *ptr = cpal + palno*8 + index*2;
+	return SDL_MapRGBA(surface->format, (ptr[0]&0x1f)<<3, (((ptr[0]&0xe0)>>5)|((ptr[1]&0x3)<<3))<<3,
+						 ((ptr[1]&0x7c)>>2)<<3, 255);
 }
 
 void lcd_draw_background_oneline(Uint32 buf[]) {
@@ -65,17 +72,37 @@ void lcd_draw_background_oneline(Uint32 buf[]) {
 	int current_index = y*160;
 	int map_y=(y+scy)%256, tile_y=map_y>>3;
 	int in_y=map_y%8;
-	for(int x=0; x<160; x++){
-		int map_x=(x+scx)%256, tile_x=map_x>>3;
-		uint8_t *thisdata; //タイルパターンデータの開始アドレス
-		if(lcdc&0x10)
-			thisdata = tiledata + ((uint8_t)tilemap[tile_y*32+tile_x]*16);
-		else
-			thisdata = tiledata + ((int8_t)tilemap[tile_y*32+tile_x]*16);
 
-		int in_x=map_x%8;
-		uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
-		buf[current_index++] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
+	if(CGBMODE){
+		for(int x=0; x<160; x++){
+			int map_x=(x+scx)%256, tile_x=map_x>>3;
+			uint8_t tileattr = (tilemap+0x2000)[tile_y*32+tile_x]; //vram bank1
+			int tilebank = (tileattr&0x8)>>3;
+			uint8_t *thisdata; //タイルパターンデータの開始アドレス
+			if(lcdc&0x10)
+				thisdata = (tiledata+0x2000*tilebank) + ((uint8_t)tilemap[tile_y*32+tile_x]*16);
+			else
+				thisdata = (tiledata+0x2000*tilebank) + ((int8_t)tilemap[tile_y*32+tile_x]*16);
+
+			int in_x=map_x%8;
+			uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
+			int palno = tileattr&0x7;
+			buf[current_index++] = get_color_from_cgbpallete(COLORPALETTE_BG, palno,
+											((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1));
+		}
+	}else{
+		for(int x=0; x<160; x++){
+			int map_x=(x+scx)%256, tile_x=map_x>>3;
+			uint8_t *thisdata; //タイルパターンデータの開始アドレス
+			if(lcdc&0x10)
+				thisdata = tiledata + ((uint8_t)tilemap[tile_y*32+tile_x]*16);
+			else
+				thisdata = tiledata + ((int8_t)tilemap[tile_y*32+tile_x]*16);
+
+			int in_x=map_x%8;
+			uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
+			buf[current_index++] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
+		}
 	}
 }
 
@@ -92,18 +119,38 @@ void lcd_draw_window_oneline(Uint32 buf[]) {
 	int tile_y=map_y>>3;
 	int map_x=-wx;
 	if(y<wy) return;
-	for(int x=0; x<160; x++, map_x++, current_index++){
-		if(x<wx) continue;
-		int tile_x=map_x>>3;
-		uint8_t *thisdata; //タイルパターンデータの開始アドレス
-		if(lcdc&0x10)
-			thisdata = tiledata + ((uint8_t)tilemap[tile_y*32+tile_x]*16);
-		else
-			thisdata = tiledata + ((int8_t)tilemap[tile_y*32+tile_x]*16);
+	if(CGBMODE){
+		for(int x=0; x<160; x++, map_x++, current_index++){
+			if(x<wx) continue;
+			int tile_x=map_x>>3;
+			uint8_t *thisdata; //タイルパターンデータの開始アドレス
+			uint8_t tileattr = (tilemap+0x2000)[tile_y*32+tile_x]; //vram bank1
+			int tilebank = (tileattr&0x8)>>3;
+			if(lcdc&0x10)
+				thisdata = (tiledata+0x2000*tilebank) + ((uint8_t)tilemap[tile_y*32+tile_x]*16);
+			else
+				thisdata = (tiledata+0x2000*tilebank) + ((int8_t)tilemap[tile_y*32+tile_x]*16);
 
-		int in_x=map_x%8;
-		uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
-		buf[current_index] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
+			int in_x=map_x%8;
+			uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
+			int palno = tileattr&0x7;
+			buf[current_index] = get_color_from_cgbpallete(COLORPALETTE_BG, palno,
+											((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1));
+		}
+	}else{
+		for(int x=0; x<160; x++, map_x++, current_index++){
+			if(x<wx) continue;
+			int tile_x=map_x>>3;
+			uint8_t *thisdata; //タイルパターンデータの開始アドレス
+			if(lcdc&0x10)
+				thisdata = tiledata + ((uint8_t)tilemap[tile_y*32+tile_x]*16);
+			else
+				thisdata = tiledata + ((int8_t)tilemap[tile_y*32+tile_x]*16);
+
+			int in_x=map_x%8;
+			uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
+			buf[current_index] = ABSCOLOR[BGPALETTE(((upper>>(7-in_x))&0x1)<<1 | ((lower>>(7-in_x))&0x1))];
+		}
 	}
 }
 
@@ -115,50 +162,92 @@ void lcd_draw_sprite_oneline(Uint32 buf[]) {
 	uint8_t *oam_last = oam_sorted+((SPRITECOUNT-1)*4);
 
 	memcpy(oam_sorted, INTERNAL_OAM, SPRITECOUNT*4);
-	for(int i=SPRITECOUNT-1; i>0; i--)
-		for(int j=0; j<i; j++)
-			if(oam_sorted[j*4+1]>oam_sorted[(j+1)*4+1]){
-				uint8_t temp[4];
-				for(int n=0; n<4; n++)
-					temp[n] = oam_sorted[j*4+n];
-				for(int n=0; n<4; n++)
-					oam_sorted[j*4+n] = oam_sorted[(j+1)*4+n];
-				for(int n=0; n<4; n++)
-					oam_sorted[(j+1)*4+n] = temp[n];
-			}
 
-	for(uint8_t *attr=oam_last; attr>=oam_sorted; attr-=4){
-        int sp_y=attr[0]-16, sp_x=attr[1]-8;
-        uint8_t flags=attr[3];
-        uint16_t palette_addr = (flags&0x10)?IO_OBP1_R:IO_OBP0_R;
-		if(!(sp_y<=scr_y && scr_y<sp_y+((lcdc&0x4)?16:8)) || sp_x==-8 || sp_x>=160)
-			continue;
+	if(!CGBMODE){
+		for(int i=SPRITECOUNT-1; i>0; i--)
+			for(int j=0; j<i; j++)
+				if(oam_sorted[j*4+1]>oam_sorted[(j+1)*4+1]){
+					uint8_t temp[4];
+					for(int n=0; n<4; n++)
+						temp[n] = oam_sorted[j*4+n];
+					for(int n=0; n<4; n++)
+						oam_sorted[j*4+n] = oam_sorted[(j+1)*4+n];
+					for(int n=0; n<4; n++)
+						oam_sorted[(j+1)*4+n] = temp[n];
+				}
+	}
 
-		if(lcdc&0x4){
-			//8x16 mode
-			uint8_t *upperdata = tiledata + (attr[2]&0xfe)*16;
-			uint8_t *lowerdata = tiledata + (attr[2]|0x01)*16;
-			int in_y=(flags&0x40)?(15-(scr_y-sp_y)):(scr_y-sp_y);
-			uint8_t lower=(in_y&0x8)?lowerdata[(in_y-8)*2]:upperdata[in_y*2],
-					upper=(in_y&0x8)?lowerdata[(in_y-8)*2+1]:upperdata[in_y*2+1];
-			for(int x=0; x<8; x++){
-				int scr_x=(flags&0x20)?(sp_x+(7-x)):(sp_x+x);
-				if(scr_x<0 || scr_x>=160) continue;
-				Uint32 cnum = ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1);
-				if(cnum!=0 && (!(flags&0x80) || buf[scr_y*160 + scr_x]==ABSCOLOR[BGPALETTE(0)]))
-					buf[scr_y*160 + scr_x] = ABSCOLOR[PALETTE(palette_addr, cnum)]; //0なら透過
+	if(CGBMODE){
+		for(uint8_t *attr=oam_last; attr>=oam_sorted; attr-=4){
+			int sp_y=attr[0]-16, sp_x=attr[1]-8;
+			uint8_t flags=attr[3];
+			int palno = flags&0x7;
+			int tilebank = (flags&0x8)>>3;
+			if(!(sp_y<=scr_y && scr_y<sp_y+((lcdc&0x4)?16:8)) || sp_x==-8 || sp_x>=160)
+				continue;
+
+			if(lcdc&0x4){
+				//8x16 mode
+				uint8_t *upperdata = (tiledata+0x2000*tilebank) + (attr[2]&0xfe)*16;
+				uint8_t *lowerdata = (tiledata+0x2000*tilebank) + (attr[2]|0x01)*16;
+				int in_y=(flags&0x40)?(15-(scr_y-sp_y)):(scr_y-sp_y);
+				uint8_t lower=(in_y&0x8)?lowerdata[(in_y-8)*2]:upperdata[in_y*2],
+						upper=(in_y&0x8)?lowerdata[(in_y-8)*2+1]:upperdata[in_y*2+1];
+				for(int x=0; x<8; x++){
+					int scr_x=(flags&0x20)?(sp_x+(7-x)):(sp_x+x);
+					if(scr_x<0 || scr_x>=160) continue;
+					Uint32 cnum = ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1);
+					if(cnum!=0)
+						buf[scr_y*160 + scr_x] = get_color_from_cgbpallete(COLORPALETTE_SP, palno, cnum); //0なら透過
+				}
+			}else{
+				//8x8 mode
+				uint8_t *thisdata = (tiledata+0x2000*tilebank) + attr[2]*16;
+				int in_y=(flags&0x40)?(7-(scr_y-sp_y)):(scr_y-sp_y);
+				uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
+				for(int x=0; x<8; x++){
+					int scr_x=(flags&0x20)?(sp_x+(7-x)):(sp_x+x);
+					if(scr_x<0 || scr_x>=160) continue;
+					Uint32 cnum = ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1);
+					if(cnum!=0)
+						buf[scr_y*160 + scr_x] = get_color_from_cgbpallete(COLORPALETTE_SP, palno, cnum); //0なら透過
+				}
 			}
-		}else{
-			//8x8 mode
-			uint8_t *thisdata = tiledata + attr[2]*16;
-			int in_y=(flags&0x40)?(7-(scr_y-sp_y)):(scr_y-sp_y);
-			uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
-			for(int x=0; x<8; x++){
-				int scr_x=(flags&0x20)?(sp_x+(7-x)):(sp_x+x);
-				if(scr_x<0 || scr_x>=160) continue;
-				Uint32 cnum = ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1);
-				if(cnum!=0 && (!(flags&0x80) || buf[scr_y*160 + scr_x]==ABSCOLOR[BGPALETTE(0)]))
-					buf[scr_y*160 + scr_x] = ABSCOLOR[PALETTE(palette_addr, cnum)]; //0なら透過
+		}
+	}else{
+		for(uint8_t *attr=oam_last; attr>=oam_sorted; attr-=4){
+			int sp_y=attr[0]-16, sp_x=attr[1]-8;
+			uint8_t flags=attr[3];
+			uint16_t palette_addr = (flags&0x10)?IO_OBP1_R:IO_OBP0_R;
+			if(!(sp_y<=scr_y && scr_y<sp_y+((lcdc&0x4)?16:8)) || sp_x==-8 || sp_x>=160)
+				continue;
+
+			if(lcdc&0x4){
+				//8x16 mode
+				uint8_t *upperdata = tiledata + (attr[2]&0xfe)*16;
+				uint8_t *lowerdata = tiledata + (attr[2]|0x01)*16;
+				int in_y=(flags&0x40)?(15-(scr_y-sp_y)):(scr_y-sp_y);
+				uint8_t lower=(in_y&0x8)?lowerdata[(in_y-8)*2]:upperdata[in_y*2],
+						upper=(in_y&0x8)?lowerdata[(in_y-8)*2+1]:upperdata[in_y*2+1];
+				for(int x=0; x<8; x++){
+					int scr_x=(flags&0x20)?(sp_x+(7-x)):(sp_x+x);
+					if(scr_x<0 || scr_x>=160) continue;
+					Uint32 cnum = ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1);
+					if(cnum!=0 && (!(flags&0x80) || buf[scr_y*160 + scr_x]==ABSCOLOR[BGPALETTE(0)]))
+						buf[scr_y*160 + scr_x] = ABSCOLOR[PALETTE(palette_addr, cnum)]; //0なら透過
+				}
+			}else{
+				//8x8 mode
+				uint8_t *thisdata = tiledata + attr[2]*16;
+				int in_y=(flags&0x40)?(7-(scr_y-sp_y)):(scr_y-sp_y);
+				uint8_t lower=thisdata[in_y*2], upper=thisdata[in_y*2+1];
+				for(int x=0; x<8; x++){
+					int scr_x=(flags&0x20)?(sp_x+(7-x)):(sp_x+x);
+					if(scr_x<0 || scr_x>=160) continue;
+					Uint32 cnum = ((upper>>(7-x))&0x1)<<1 | ((lower>>(7-x))&0x1);
+					if(cnum!=0 && (!(flags&0x80) || buf[scr_y*160 + scr_x]==ABSCOLOR[BGPALETTE(0)]))
+						buf[scr_y*160 + scr_x] = ABSCOLOR[PALETTE(palette_addr, cnum)]; //0なら透過
+				}
 			}
 		}
 	}

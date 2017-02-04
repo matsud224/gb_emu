@@ -357,6 +357,26 @@ int main(int argc, char *argv[]) {
 
 
 				lcd_change_mode(0); over=cpu_exec(204-over);
+
+				//H-Blank DMA
+				if(CGBMODE && (INTERNAL_IO[IO_HDMA5_R]&0x80) == 0){
+					uint16_t src=(INTERNAL_IO[IO_HDMA1_R]<<8) | INTERNAL_IO[IO_HDMA2_R];
+					uint16_t dst=(INTERNAL_IO[IO_HDMA3_R]<<8) | INTERNAL_IO[IO_HDMA4_R];
+					//transfer 0x10 bytes
+					for(int i=0; i<0x10; i++,src++,dst++)
+						memory_write8(dst, memory_read8(src));
+					int remaining = (INTERNAL_IO[IO_HDMA5_R]&0x7f)/0x10-1;
+					remaining -= 0x10;
+					if(remaining == 0)
+						INTERNAL_IO[IO_HDMA5_R] = 0xff;
+					else
+						INTERNAL_IO[IO_HDMA5_R] = (remaining+1)*0x10;
+					INTERNAL_IO[IO_HDMA1_R] = src>>8;
+					INTERNAL_IO[IO_HDMA2_R] = src&0xff;
+					INTERNAL_IO[IO_HDMA3_R] = dst>>8;
+					INTERNAL_IO[IO_HDMA4_R] = dst&0xff;
+				}
+
 				INC_LY;
 			}
 			SDL_Texture *texture = SDL_CreateTextureFromSurface(window_renderer, bitmap_surface);

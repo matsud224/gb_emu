@@ -5,6 +5,7 @@
 
 extern uint32_t DIV;
 extern uint16_t TIMA;
+extern int CGBMODE;
 extern int SERIALSTATE;
 extern int timer_remaining;
 extern int timer_interval;
@@ -14,6 +15,8 @@ extern int serial_interval;
 extern uint8_t*		INTERNAL_VRAM;
 extern uint8_t*		INTERNAL_OAM;
 extern uint8_t*		INTERNAL_IO;
+extern uint8_t*		COLORPALETTE_BG;
+extern uint8_t*		COLORPALETTE_SP;
 
 
 #define V_CART_ROM0 		0x0000
@@ -70,7 +73,20 @@ extern uint8_t*		INTERNAL_IO;
 #define IO_OBP1 0xFF49
 #define IO_WY 0xFF4A
 #define IO_WX 0xFF4B
+#define IO_KEY1 0xFF4D
+#define IO_VBK 0xFF4F
 #define IO_BVBK 0xFF50
+#define IO_HDMA1 0xFF51
+#define IO_HDMA2 0xFF52
+#define IO_HDMA3 0xFF53
+#define IO_HDMA4 0xFF54
+#define IO_HDMA5 0xFF55
+#define IO_RP 0xFF56
+#define IO_BCPS 0xFF68
+#define IO_BCPD 0xFF69
+#define IO_OCPS 0xFF6A
+#define IO_OCPD 0xFF6B
+#define IO_SVBK 0xFF70
 #define IO_IE 0xFFFF
 
 #define IO_P1_R 0x00
@@ -113,7 +129,20 @@ extern uint8_t*		INTERNAL_IO;
 #define IO_OBP1_R 0x49
 #define IO_WY_R 0x4A
 #define IO_WX_R 0x4B
+#define IO_KEY1_R 0x4D
+#define IO_VBK_R 0x4F
 #define IO_BVBK_R 0x50
+#define IO_HDMA1_R 0x51
+#define IO_HDMA2_R 0x52
+#define IO_HDMA3_R 0x53
+#define IO_HDMA4_R 0x54
+#define IO_HDMA5_R 0x55
+#define IO_RP_R 0x56
+#define IO_BCPS_R 0x68
+#define IO_BCPD_R 0x69
+#define IO_OCPS_R 0x6A
+#define IO_OCPD_R 0x6B
+#define IO_SVBK_R 0x70
 #define IO_IE_R 0xFF
 
 

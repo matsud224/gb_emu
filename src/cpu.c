@@ -149,6 +149,7 @@ static uint32_t FLG_Z, FLG_N, FLG_H, FLG_C, FLG_IME;
 #define ADDSP_16 (cr=REG_SP+(int8_t)(OPERAND8), FLG_Z=0, FLG_N=0, FLG_C=((REG_SP&0xff)+OPERAND8)&0x100, FLG_H=((OPERAND8&0xf)+(REG_SP&0xf))&0x10, REG_SP=cr)
 #define ADDHLSP_16 (cr=REG_SP+(int8_t)(OPERAND8), FLG_Z=0, FLG_N=0, FLG_C=((REG_SP&0xff)+OPERAND8)&0x100, FLG_H=((OPERAND8&0xf)+(REG_SP&0xf))&0x10, REG_HL=cr)
 
+// variables for serial
 int master_sent = 1;
 static int delayed_serialint = 0;
 static const int clock_bit_table[4] = {10, 4, 6, 8};
@@ -220,12 +221,21 @@ void tick(int *cycles, int n) {
 
 void startup() {
 	CPUMODE = CPU_MODE_NORMAL;
-	REG_A=0x01;
-	FLG_C=1; FLG_N=0; FLG_Z=1; FLG_H=1;
-	REG_BC=0x0013;
-	REG_DE=0x00d8;
-	REG_HL=0x014d;
-	REG_SP=0xfffe;
+	if(CGBMODE){
+		REG_A=0x11;
+		FLG_C=0; FLG_N=0; FLG_Z=1; FLG_H=0;
+		REG_BC=0x0000;
+		REG_DE=0x00d8;
+		REG_HL=0x014d;
+		REG_SP=0xfffe;
+	}else{
+		REG_A=0x01;
+		FLG_C=1; FLG_N=0; FLG_Z=1; FLG_H=1;
+		REG_BC=0x0013;
+		REG_DE=0x00d8;
+		REG_HL=0x014d;
+		REG_SP=0xfffe;
+	}
 	FLG_IME=1; //???
 	memory_write8(0xff00, 0x00);
 	memory_write8(0xff05, 0x00);
@@ -259,6 +269,10 @@ void startup() {
 	memory_write8(0xff4a, 0x00);
 	memory_write8(0xff4b, 0x00);
 	memory_write8(0xffff, 0x00);
+
+	memory_write8(0xff4f, 0x00);
+	memory_write8(0xff70, 0x01);
+	memory_write8(0xff55, 0xff);
 
 	REG_PC=0x100;
 }
