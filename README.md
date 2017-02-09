@@ -1,7 +1,7 @@
 # gb_emu
-Gameboy(DMG) Emulator written in C
+Gameboy Emulator written in C
 
-ゲームボーイ（カラーじゃない）のエミュレータ。
+ゲームボーイのエミュレータ。
 
 # Build
 ```
@@ -11,5 +11,5 @@ Depends: libsdl2
 
 # Usage
 ```
-./gb_emu ROMfile [-s SaveData(Cartridge RAM)] [-z Zoom]
+./gb_emu ROMfile [-s SaveData(Cartridge RAM)] [-z Zoom] [-d force DMG(monochrome) mode]
 ```
