@@ -40,7 +40,7 @@ static struct cartridge *cart;
 int memory_init(struct cartridge *c) {
 	cart = c;
 
-	if(cart_header(c)->cgbflag == CGBFLAG_GB)
+	if(cart_header(c)->cgbflag < CGBFLAG_BOTH)
 		CGBMODE = 0;
 	else
 		CGBMODE = 1;

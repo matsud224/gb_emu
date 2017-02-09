@@ -141,7 +141,8 @@ int main(int argc, char *argv[]) {
 	int port = 35902, zoom = 1;
 	int has_ram=0, has_host = 0;
 	int tcpmode = 0; //0..使用しない/1..サーバ/2..クライアント
-	while((result=getopt(argc, argv, "lcs:p:h:z:"))!=-1){
+	int force_dmg = 0;
+	while((result=getopt(argc, argv, "dlcs:p:h:z:"))!=-1){
 		switch(result){
 		case 'l':
 			//tcp listen(server)
@@ -168,6 +169,10 @@ int main(int argc, char *argv[]) {
 		case 'z':
 			//zoom
 			zoom = atoi(optarg);
+			break;
+		case 'd':
+			//DMG mode(monochrome)
+			force_dmg = 1;
 			break;
 		case ':':
 		case '?':
@@ -233,6 +238,9 @@ int main(int argc, char *argv[]) {
 		puts("memory_init failed");
 		return -1;
 	}
+
+	if(force_dmg)
+		CGBMODE = 0;
 
 	switch(tcpmode){
 	case 1:
