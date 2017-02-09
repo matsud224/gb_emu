@@ -187,6 +187,7 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 		case IO_KEY1_R:
 			CGBCHECK;
 			/* not implemented */
+			puts("CPU double-speed mode is unimplemented!");
 			break;
 		case IO_VBK_R:
 			CGBCHECK;
@@ -347,6 +348,7 @@ uint8_t memory_read8(uint16_t src) {
 		case IO_KEY1_R:
 			CGBCHECK;
 			/* not implemented */
+			puts("CPU double-speed mode is unimplemented!");
 			break;
 		case IO_VBK_R: return INTERNAL_IO[IO_VBK_R];
 		case IO_HDMA5_R: return INTERNAL_IO[IO_HDMA5_R];
