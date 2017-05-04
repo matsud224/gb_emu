@@ -7,38 +7,70 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
+#include <SDL2/SDL.h>
 
 static int sock = -1;
+static SDL_Thread *serial_recv_thread;
 
-//データなし/エラー時は負の値を返す
-int serial_recv() {
-	if(sock<0) return -1;
+#define SERIAL_DELAY_CYCLE 20000 
+int serial_received = 0;
+int serial_sent = 0;
+int serial_remaining = 0;
+uint8_t serial_recv_buffer = 0;
 
-	int result;
-	uint8_t data;
-	if((result=recv(sock, &data, 1, MSG_DONTWAIT))==1){
-		printf("r %X\n", data);
-		return data;
-	}else if(result==-1 && errno!=EAGAIN && errno!=EWOULDBLOCK){
-		perror("recv");
-		close(sock);
-		sock = -1;
-		return -1;
+static int recv_thread(void *ptr) {
+	while(1){
+		if(sock<0) break;
+		if(recv(sock, &serial_recv_buffer, 1, 0)!=1){
+			perror("recv");
+			close(sock);
+			sock = -1;
+			serial_recv_buffer = 0xff;
+		}
+		//printf("r %X\n", serial_recv_buffer);
+		//SDL_Delay(1);
+		serial_remaining = SERIAL_DELAY_CYCLE;
+		serial_received = 1;
 	}
-	return -2;
+	return 0;
+}
+
+static int noconn_recv_thread(void *ptr) {
+	//SDL_Delay(1);
+	serial_remaining = SERIAL_DELAY_CYCLE;
+	serial_recv_buffer = 0xff;
+	serial_received = 1;
+	return 0;
 }
 
 void serial_send(uint8_t data) {
-	if(sock<0) return;
-
-	if(send(sock, &data, 1, MSG_NOSIGNAL)!=1){
-		perror("write");
-		close(sock);
-		sock = -1;
+	if(sock<0 || send(sock, &data, 1, MSG_NOSIGNAL|MSG_DONTWAIT)!=1){
+		if(sock>0){
+			perror("send");
+			close(sock);
+			sock = -1;
+		}
+		SDL_Thread *noconn_thread = SDL_CreateThread(noconn_recv_thread, "noconn_thread", 
+		(void*)NULL);
+		if(noconn_thread == NULL)
+			printf("\nSDL_CreateThread failed: %s\n", SDL_GetError());
+		else
+			SDL_DetachThread(noconn_thread);
 	}else{
-		printf("w %X\n", data);
+		//printf("w %X\n", data);
+	}
+}
+
+static void serial_start_recv_thread() {
+	serial_recv_thread = SDL_CreateThread(recv_thread, "serial_recv_thread", 
+		(void*)NULL);
+	if(serial_recv_thread == NULL){
+		printf("\nSDL_CreateThread failed: %s\n", SDL_GetError());
+	}else{
+		SDL_DetachThread(serial_recv_thread);
 	}
 }
 
@@ -79,10 +111,7 @@ int serial_serverinit(int port) {
 			inet_ntoa(client.sin_addr), ntohs(client.sin_port));
 
 	close(sock0);
-
-	serial_interval = 512;
-	serial_remaining = serial_interval;
-
+	serial_start_recv_thread();	
 	return 0;
 }
 
@@ -114,10 +143,13 @@ int serial_clientinit(char *host, int port) {
 		return -1;
 	}
 
-	serial_interval = 512;
-	serial_remaining = serial_interval;
-
+	serial_start_recv_thread();
 	return 0;
+}
+
+int serial_linked() {
+	if(sock<0) return 0;
+	else return 1;
 }
 
 void serial_close() {

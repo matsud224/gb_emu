@@ -5,7 +5,7 @@ ifeq "$(shell getconf LONG_BIT)" "64"
 else
   LDFLAGS =
 endif
-LIBS      = -lSDL2 -lSDL2_ttf -lm
+LIBS      = -lSDL2 -lm
 INCLUDE   = -I./src
 TARGET    = ./bin/$(shell basename `readlink -f .`)
 SRCDIR    = ./src

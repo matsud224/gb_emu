@@ -339,8 +339,8 @@ int main(int argc, char *argv[]) {
 
 		int avgfps=frame_count/(TIMER_GET(fps_timer)/1000+1);
 		if(frame_count%60==0){
-			static char wndtitle[32];
-			snprintf(wndtitle, 32, "%.16s  FPS = %d", hdr->title, avgfps);
+			static char wndtitle[64];
+			snprintf(wndtitle, 64, "%.16s  FPS = %d %s", hdr->title, avgfps, serial_linked()?"Linked":"");
 			SDL_SetWindowTitle(main_window, wndtitle);
 		}
 

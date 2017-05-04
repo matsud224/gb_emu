@@ -149,11 +149,6 @@ static uint32_t FLG_Z, FLG_N, FLG_H, FLG_C, FLG_IME;
 #define ADDSP_16 (cr=REG_SP+(int8_t)(OPERAND8), FLG_Z=0, FLG_N=0, FLG_C=((REG_SP&0xff)+OPERAND8)&0x100, FLG_H=((OPERAND8&0xf)+(REG_SP&0xf))&0x10, REG_SP=cr)
 #define ADDHLSP_16 (cr=REG_SP+(int8_t)(OPERAND8), FLG_Z=0, FLG_N=0, FLG_C=((REG_SP&0xff)+OPERAND8)&0x100, FLG_H=((OPERAND8&0xf)+(REG_SP&0xf))&0x10, REG_HL=cr)
 
-// variables for serial
-int master_sent = 1;
-static int delayed_serialint = 0;
-static const int clock_bit_table[4] = {10, 4, 6, 8};
-
 static int CPUMODE;
 #define CPU_MODE_NORMAL 0
 #define CPU_MODE_STOP 	1
@@ -176,46 +171,19 @@ void tick(int *cycles, int n) {
 			cpu_request_interrupt(INT_TIMER);
 		}
 	}
-	serial_remaining -= n;
-	while(serial_interval>0 && serial_remaining<=0){
-		if(delayed_serialint>0){
-			delayed_serialint--;
-			if(delayed_serialint==0){
-				cpu_request_interrupt(INT_SERIAL);
-			}
+
+	serial_remaining -= n;	 
+	if(serial_remaining<0 && serial_received){
+		serial_received = 0;
+		if(!serial_sent){
+			serial_send(INTERNAL_IO[IO_SB_R]);
 		}
-		int data;
-		if(INTERNAL_IO[IO_SC_R] & 0x1){
-			if(SERIALSTATE==1){
-				if(master_sent==0){
-					serial_send(INTERNAL_IO[IO_SB_R]);
-					master_sent=1;
-					serial_remaining += serial_interval*7;
-				}else{
-					data = serial_recv();
-					if(data>=0){
-						INTERNAL_IO[IO_SB_R] = data;
-						SERIALSTATE = 0;
-						delayed_serialint=8;
-					}else if(data==-1){
-						//相手がいない
-						INTERNAL_IO[IO_SB_R] = 0xff;
-						SERIALSTATE = 0;
-						delayed_serialint=8;
-					}
-				}
-			}
-		}else{
-			data = serial_recv();
-			if(data>=0){
-				serial_send(SERIALSTATE?INTERNAL_IO[IO_SB_R]:0x0);
-				INTERNAL_IO[IO_SB_R] = data;
-				SERIALSTATE = 0;
-				delayed_serialint=8;
-			}
-		}
-		serial_remaining += serial_interval;
+		INTERNAL_IO[IO_SB_R] = serial_recv_buffer;
+		INTERNAL_IO[IO_SC_R] &= ~0x80;
+		serial_sent=0;
+		cpu_request_interrupt(INT_SERIAL);
 	}
+
 }
 
 

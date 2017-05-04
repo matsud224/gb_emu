@@ -115,12 +115,13 @@ uint8_t memory_write8(uint16_t dst, uint8_t value) {
 		switch(dst-V_INTERNAL_IO){
 		case IO_SB_R: INTERNAL_IO[IO_SB_R] = value; break;
 		case IO_SC_R:
-			if((INTERNAL_IO[IO_SC_R]&0x1) == (value&0x1))
-				master_sent = 1;
 			INTERNAL_IO[IO_SC_R] = value;
-			SERIALSTATE = value>>7;
-			if(SERIALSTATE && INTERNAL_IO[IO_SC_R]&0x1){
-				master_sent = 0;
+			if((value & 0x81) == 0x81){
+				//master
+				if(!serial_sent){
+					serial_send(INTERNAL_IO[IO_SB_R]);
+					serial_sent=1;
+				}
 			}
 			break;
 		case IO_P1_R: INTERNAL_IO[IO_P1_R] = value; break;
@@ -298,7 +299,7 @@ uint8_t memory_read8(uint16_t src) {
 		//INTERNAL_IO
 		switch(src-V_INTERNAL_IO){
 		case IO_SB_R: return INTERNAL_IO[IO_SB_R];
-		case IO_SC_R: return (SERIALSTATE<<7) | (INTERNAL_IO[IO_SC_R] & 0x1) | 0x2;
+		case IO_SC_R: return INTERNAL_IO[IO_SC_R];
 		case IO_P1_R: return joypad_status();
 		case IO_DIV_R: return DIV>>8;
 		case IO_TIMA_R: return TIMA;
