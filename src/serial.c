@@ -15,7 +15,7 @@
 static int sock = -1;
 static SDL_Thread *serial_recv_thread;
 
-#define SERIAL_DELAY_CYCLE 20000 
+#define SERIAL_DELAY_CYCLE 40000 
 int serial_received = 0;
 int serial_sent = 0;
 int serial_remaining = 0;
