@@ -206,8 +206,16 @@ int main(int argc, char *argv[]) {
 
 	static const int ramsize_table[] = {0,2048,8192,8192*4,8192*16,8192*8};
 	struct gb_carthdr *hdr = cart_header(cart);
-    printf("title: %.16s\ncgbflag: 0x%X\ncarttype: 0x%X\nromsize: 0x%X\nramsize: 0x%X(%dKB)\n",
-		 hdr->title, hdr->cgbflag, hdr->carttype, hdr->romsize, hdr->ramsize, ramsize_table[hdr->ramsize]);
+
+  char title[0xb + 1] = {'\0'};
+  for(int i = 0; i < 0xb; i++)
+    if(isprint(hdr->title[i]))
+      title[i] = hdr->title[i];
+    else
+      break;
+
+  printf("title: %.16s\ncgbflag: 0x%X\ncarttype: 0x%X\nromsize: 0x%X\nramsize: 0x%X(%dKB)\n",
+   title, hdr->cgbflag, hdr->carttype, hdr->romsize, hdr->ramsize, ramsize_table[hdr->ramsize]);
 
 	if(hdr->ramsize!=0){
 		char buf[256];
@@ -340,7 +348,7 @@ int main(int argc, char *argv[]) {
 		int avgfps=frame_count/(TIMER_GET(fps_timer)/1000+1);
 		if(frame_count%60==0){
 			static char wndtitle[64];
-			snprintf(wndtitle, 64, "%.16s  FPS = %d %s", hdr->title, avgfps, serial_linked()?"Linked":"");
+			snprintf(wndtitle, 64, "%.16s  FPS = %d %s", title, avgfps, serial_linked()?"Linked":"");
 			SDL_SetWindowTitle(main_window, wndtitle);
 		}
 
