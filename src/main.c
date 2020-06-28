@@ -303,24 +303,24 @@ int main(int argc, char *argv[]) {
 				break;
 			case SDL_KEYDOWN:
 				switch(e.key.keysym.sym){
-				case SDLK_RIGHT:
-				case SDLK_LEFT:
-				case SDLK_UP:
-				case SDLK_DOWN:
+				case RIGHT_KEY:
+				case LEFT_KEY:
+				case UP_KEY:
+				case DOWN_KEY:
 					if((INTERNAL_IO[IO_P1_R]&0x10)==0)
 						cpu_request_interrupt(INT_JOYPAD);
 					break;
-				case SDLK_z:
-				case SDLK_x:
-				case SDLK_LEFTBRACKET:
-				case SDLK_RIGHTBRACKET:
+				case A_KEY:
+				case B_KEY:
+				case SELECT_KEY:
+				case START_KEY:
 					if((INTERNAL_IO[IO_P1_R]&0x20)==0)
 						cpu_request_interrupt(INT_JOYPAD);
 					break;
-				case SDLK_s:
+				case SCREENSHOT_KEY:
 					SDL_SaveBMP(bitmap_surface, "screenshot.bmp");
 					break;
-				case SDLK_l:
+				case LOGGING_KEY:
 					logging_enabled = 1;
 					break;
 				default:

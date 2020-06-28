@@ -22,16 +22,16 @@ uint8_t joypad_status() {
 	if(JOYPAD_INPUTDEVICE == INPUTDEVICE_KEYBOARD){
 		const Uint8 *state=SDL_GetKeyboardState(NULL);
 		if(!p14){
-			if(state[SDL_GetScancodeFromKey(SDLK_RIGHT)]) p10=0;
-			if(state[SDL_GetScancodeFromKey(SDLK_LEFT)]) p11=0;
-			if(state[SDL_GetScancodeFromKey(SDLK_UP)]) p12=0;
-			if(state[SDL_GetScancodeFromKey(SDLK_DOWN)]) p13=0;
+			if(state[SDL_GetScancodeFromKey(RIGHT_KEY)]) p10=0;
+			if(state[SDL_GetScancodeFromKey(LEFT_KEY)]) p11=0;
+			if(state[SDL_GetScancodeFromKey(UP_KEY)]) p12=0;
+			if(state[SDL_GetScancodeFromKey(DOWN_KEY)]) p13=0;
 		}
 		if(!p15){
-			if(state[SDL_GetScancodeFromKey(SDLK_z)]) p10=0;
-			if(state[SDL_GetScancodeFromKey(SDLK_x)]) p11=0;
-			if(state[SDL_GetScancodeFromKey(SDLK_LEFTBRACKET)]) p12=0;
-			if(state[SDL_GetScancodeFromKey(SDLK_RIGHTBRACKET)]) p13=0;
+			if(state[SDL_GetScancodeFromKey(A_KEY)]) p10=0;
+			if(state[SDL_GetScancodeFromKey(B_KEY)]) p11=0;
+			if(state[SDL_GetScancodeFromKey(SELECT_KEY)]) p12=0;
+			if(state[SDL_GetScancodeFromKey(START_KEY)]) p13=0;
 		}
 	}else if(JOYPAD_INPUTDEVICE == INPUTDEVICE_JOYSTICK){
 		if(!p14){

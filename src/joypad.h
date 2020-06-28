@@ -11,6 +11,17 @@
 #define JOYSTICK_BUTTON_SELECT 6
 #define JOYSTICK_BUTTON_START 7
 
+#define RIGHT_KEY      SDLK_l
+#define LEFT_KEY       SDLK_h
+#define UP_KEY         SDLK_k
+#define DOWN_KEY       SDLK_j
+#define SELECT_KEY     SDLK_LEFTBRACKET
+#define START_KEY      SDLK_RIGHTBRACKET
+#define A_KEY          SDLK_a
+#define B_KEY          SDLK_s
+#define LOGGING_KEY    SDLK_0
+#define SCREENSHOT_KEY SDLK_1
+
 
 extern int JOYPAD_INPUTDEVICE;
 #define INPUTDEVICE_KEYBOARD 0
